@@ -38,7 +38,7 @@ async function asignarRutina(r, despues, clientePreset) {
 
 vista('/planificacion/rutinas', ['admin', 'profesor'], async (main) => {
   const [lista, asig] = await Promise.all([api('GET', '/rutinas'), api('GET', '/rutinas/asignaciones')]);
-  main.innerHTML = `<div class="page-title"><h1>Rutinas</h1><div class="actions">${puede('plan.rutinas_editar') ? '<button class="primary" id="nueva">＋ Nueva rutina</button>' : ''}</div></div>${tabsPlan('/planificacion/rutinas')}
+  main.innerHTML = `<div class="page-title"><h1>Rutinas Personalizadas</h1><div class="actions">${puede('plan.rutinas_editar') ? '<button class="primary" id="nueva">＋ Nueva rutina</button>' : ''}</div></div>${tabsPlan('/planificacion/rutinas')}
     <p class="muted">Las rutinas son <b>personalizadas</b>: armalas con series, repeticiones, peso y descanso (máximo <b>${MAX_RUTINA} minutos</b>) y asignalas a un cliente en los días de la semana que corresponda. El cliente la ve en su app y vos la ves en su ficha de Clientes.</p>
     <div class="grid c2">
       <div class="card"><h3>Mis rutinas (${lista.length})</h3>${lista.length ? lista.map(r => `<div class="list-item"><div class="grow"><b>${esc(r.nombre)}</b><div class="small muted">${r.ejercicios} ejercicios · ≈ ${r.duracion_min} min${r.descripcion ? ' · ' + esc(r.descripcion) : ''}</div></div>
@@ -58,7 +58,7 @@ async function formRutina(r) {
     <div id="items"></div><div class="row"><button type="button" id="add">＋ Agregar ejercicio</button><span id="dur" class="pill"></span></div>
     <div class="row" style="justify-content:flex-end"><button type="button" data-close>Cancelar</button><button class="primary">Guardar rutina</button></div></form>`, { wide: true });
   function pintar() {
-    $('#items', m).innerHTML = `<div class="tablewrap hbar"><table style="min-width:760px"><thead><tr><th>Zona</th><th>Ejercicio</th><th class="num">Series</th><th>Repeticiones</th><th>Peso</th><th class="num">Descanso (s)</th><th class="num">Seg. por serie</th><th></th></tr></thead><tbody>
+    $('#items', m).innerHTML = `<div class="tablewrap hbar"><table style="min-width:760px"><thead><tr><th>Patrón de movimiento</th><th>Ejercicio</th><th class="num">Series</th><th>Repeticiones</th><th>Peso</th><th class="num">Descanso (s)</th><th class="num">Seg. por serie</th><th></th></tr></thead><tbody>
       ${items.map((it, i) => `<tr style="cursor:default"><td><select data-i="${i}" data-k="zona">${ZONAS_UI.map(z => `<option ${z === it.zona ? 'selected' : ''}>${z}</option>`).join('')}</select></td>
         <td><select data-i="${i}" data-k="ejercicio_id"><option value="">Elegí…</option>${ejercicios.filter(e => e.zona === it.zona).map(e => `<option value="${e.id}" ${e.id === it.ejercicio_id ? 'selected' : ''}>${esc(e.nombre)}</option>`).join('')}</select></td>
         <td><input type="number" min="1" max="20" data-i="${i}" data-k="series" value="${it.series}" style="width:64px"></td><td><input data-i="${i}" data-k="repeticiones" value="${esc(String(it.repeticiones))}" style="width:90px" placeholder="8-12"></td>

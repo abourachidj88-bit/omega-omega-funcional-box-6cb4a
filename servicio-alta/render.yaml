@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: omega-alta
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/estado
+    envVars:
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: RENDER_API_KEY
+        sync: false
+      - key: ALTA_CLAVE
+        sync: false
+      - key: PLANTILLA
+        value: abourachidj88-bit/omega-gimnasio

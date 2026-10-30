@@ -64,7 +64,7 @@ function menuDe(rol) {
   add('/asistencias', 'Asistencias', primero([['/asistencias', 'asist.ver'], ['/asistencias/cargar', 'asist.registrar']]));
   add('/clientes', 'Alumnos', primero([['/clientes', 'cli.ver']]));
   add('/crm', 'Visitas', primero([['/crm', 'crm.ver']]));
-  add('/planificacion', 'Clases', primero([['/planificacion', 'plan.semana'], ['/planificacion/staff', 'plan.staff'], ['/planificacion/rutinas', 'plan.rutinas'], ['/planificacion/biblioteca', 'plan.biblioteca'], ['/planificacion/formatos', 'plan.config']]));
+  add('/planificacion', 'Clases', primero([['/planificacion', 'plan.semana'], ['/planificacion/staff', 'plan.staff'], ['/planificacion/rutinas', 'plan.rutinas'], ['/planificacion/biblioteca', 'plan.biblioteca'], ['/planificacion/formatos', 'plan.semana']]));
   add('/finanzas', puede('fin.analisis|fin.resultados|fin.presupuesto') ? 'Finanzas' : 'Caja', primero([['/finanzas', 'fin.caja'], ['/finanzas/mes', 'fin.analisis'], ['/finanzas/resultados', 'fin.resultados'], ['/finanzas/presupuesto', 'fin.presupuesto']]));
   out.push(['/cuenta', 'Mi cuenta', '/cuenta']);
   return out;

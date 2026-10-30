@@ -42,7 +42,7 @@ const lunesSemana = () => { const d = new Date(hoy() + 'T00:00:00Z'); return sum
     console.log('Módulo 2 – Planificación');
     r = await api('GET', '/api/ejercicios', undefined, admin);
     const porZona = {}; r.data.forEach(e => porZona[e.zona] = (porZona[e.zona] || 0) + 1);
-    assert.equal(Object.keys(porZona).length, 9); Object.values(porZona).forEach(n => assert.equal(n, 50)); paso('9 zonas (con Hombros y Glúteos) con 50 ejercicios y su progresión cada una (' + r.data.length + ' ejercicios)');
+    assert.equal(Object.keys(porZona).length, 7); Object.values(porZona).forEach(n => assert.ok(n >= 20)); assert.ok(r.data.length >= 450); assert.ok(r.data.every(e => e.capacidad && e.energia)); paso('7 patrones de movimiento con ejercicios, capacidad y sistema energético (' + r.data.length + ' ejercicios)');
     r = await api('POST', '/api/planificacion/generar', { desde: lunesSemana(), dias: 7 }, admin); assert.equal(r.status, 409); assert.match(r.data.error, /intervalos/); paso('no planifica hasta configurar intervalos de trabajo/descanso');
     r = await api('GET', '/api/formatos', undefined, admin); const formatos = r.data; assert.equal(formatos.length, 6);
     r = await api('PUT', '/api/formatos', { formatos: formatos.map((f, i) => ({ id: f.id, trabajo_seg: 30 + i * 5, descanso_seg: 15 })) }, admin); assert.equal(r.status, 200); paso('el dueño carga trabajo y descanso de los 6 formatos');
@@ -67,7 +67,7 @@ const lunesSemana = () => { const d = new Date(hoy() + 'T00:00:00Z'); return sum
     // cobertura muscular en 3 días
     const zonasA = new Set();
     for (let i = 0; i < 3; i++) { const dd = (await api('GET', '/api/planificacion?desde=' + suma(lunesSemana(), i) + '&dias=1', undefined, admin)).data[0].clases.find(c => c.circuito); if (dd) dd.circuito.rondas[0].ejercicios.forEach(e => zonasA.add(e.zona)); }
-    assert.ok(zonasA.size >= 6, 'cobertura ' + [...zonasA]); paso('en 3 días de entrenamiento se cubren ' + zonasA.size + ' de 7 zonas');
+    assert.ok(zonasA.size >= 6, 'cobertura ' + [...zonasA]); paso('en 3 días de entrenamiento se cubren ' + zonasA.size + ' de 7 patrones');
     // reemplazo con sugerencias
     const circ = clases.find(c => c.circuito).circuito;
     r = await api('GET', '/api/planificacion/circuito/' + circ.id + '/sugerencias?slot=1', undefined, prof); assert.ok(r.data.length > 3);

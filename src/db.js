@@ -2,7 +2,9 @@
 const path = require('node:path');
 const fs = require('node:fs');
 const { DatabaseSync } = require('node:sqlite');
-const { ZONAS, E, EQUIPAMIENTO } = require('./seed-ejercicios');
+const { ZONAS: ZONAS_SEED, E, EQUIPAMIENTO } = require('./seed-ejercicios');
+const est = require('./estimulos');
+const ZONAS = est.ZONAS;      // Versión 6: la biblioteca se agrupa por patrón de movimiento
 const { NUEVOS, patronDe } = require('./seed-ejercicios-v1');
 const { GLUTEOS, intensidadDe, PAISES, CAMPANAS_BASE } = require('./seed-ejercicios-v2');
 const migraciones = require('./migraciones');
@@ -170,7 +172,7 @@ function setConfig(k, v) {
 function seed() {
   if (!get('SELECT 1 AS x FROM ejercicios LIMIT 1')) {
     tx(() => {
-      for (const zona of ZONAS) {
+      for (const zona of ZONAS_SEED) {
         for (const [n, p2, p3, eq] of (E[zona] || [])) {
           run('INSERT INTO ejercicios (zona, nombre, prog2, prog3, equipo, unidades) VALUES (?,?,?,?,?,1)', zona, n, p2, p3, eq);
         }
@@ -203,14 +205,14 @@ function seed() {
 // Biblioteca de la Versión 1: completa hasta 50 ejercicios por zona (sin duplicar los que ya existen)
 function seedV1() {
   tx(() => {
-    for (const zona of ZONAS) {
+    if (!getConfig('biblioteca_v6')) for (const zona of ZONAS_SEED) {
       const existentes = new Set(all('SELECT nombre FROM ejercicios WHERE zona = ?', zona).map(r => r.nombre));
       for (const [n, p2, p3, eq, patron] of (NUEVOS[zona] || [])) {
         if (existentes.has(n)) continue;
         run("INSERT INTO ejercicios (zona, nombre, prog2, prog3, equipo, unidades, patron, origen) VALUES (?,?,?,?,?,1,?,'base')", zona, n, p2, p3, eq, patron);
       }
     }
-    for (const e of all('SELECT id, zona, nombre FROM ejercicios WHERE patron IS NULL')) run('UPDATE ejercicios SET patron = ? WHERE id = ?', patronDe(e.zona, e.nombre), e.id);
+    if (!getConfig('biblioteca_v6')) for (const e of all('SELECT id, zona, nombre FROM ejercicios WHERE patron IS NULL')) run('UPDATE ejercicios SET patron = ? WHERE id = ?', patronDe(e.zona, e.nombre), e.id);
     if (!get('SELECT 1 AS x FROM planes LIMIT 1')) {
       const top = get('SELECT precio_plan AS p, COUNT(*) AS n FROM clientes WHERE precio_plan > 0 GROUP BY precio_plan ORDER BY n DESC LIMIT 1');
       const p = top ? top.p : 0;
@@ -222,7 +224,7 @@ function seedV1() {
 function seedV2() {
   tx(() => {
     const ya = new Set(all("SELECT nombre FROM ejercicios WHERE zona = 'Glúteos'").map(r => r.nombre));
-    for (const [n, p2, p3, eq, patron] of GLUTEOS) {
+    if (!getConfig('biblioteca_v6')) for (const [n, p2, p3, eq, patron] of GLUTEOS) {
       if (ya.has(n)) continue;
       run("INSERT INTO ejercicios (zona, nombre, prog2, prog3, equipo, unidades, patron, origen) VALUES ('Glúteos',?,?,?,?,1,?,'base')", n, p2, p3, eq, patron);
     }
@@ -233,6 +235,38 @@ function seedV2() {
     for (const f of all("SELECT id FROM formatos WHERE intensidad_min IS NULL AND (LOWER(nombre) LIKE '%hiit%')")) run("UPDATE formatos SET intensidad_min = 'moderada' WHERE id = ?", f.id);
   });
 }
-if (sync.NODO !== 'nube') { seed(); seedV1(); seedV2(); }
+// Versión 6: reclasifica la biblioteca por estímulos (patrón de movimiento / capacidad física / sistema energético), agrega movilidad y equilibrio,
+// carga los parámetros iniciales de los formatos y fija la agenda general como agenda de la semana actual. Se hace una sola vez.
+function seedV6() {
+  const { nowAR, lunesDe } = require('./util');
+  tx(() => {
+    if (!getConfig('biblioteca_v6')) {
+      for (const e of all('SELECT id, zona, nombre, patron, intensidad FROM ejercicios')) {
+        if (ZONAS.includes(e.zona)) continue;
+        const c = est.clasificar(e.zona, e.patron, e.nombre, e.intensidad);
+        run('UPDATE ejercicios SET zona = ?, capacidad = ?, energia = ? WHERE id = ?', c.zona, c.capacidad, c.energia, e.id);
+      }
+      const ya = new Set(all('SELECT nombre FROM ejercicios').map(r => r.nombre.toLowerCase()));
+      for (const [clave, n, p2, p3, patron, cap, en] of est.NUEVOS) {
+        if (ya.has(n.toLowerCase())) continue;
+        run("INSERT INTO ejercicios (zona, nombre, prog2, prog3, equipo, unidades, patron, origen, intensidad, capacidad, energia) VALUES (?,?,?,?, 'ninguno', 1, ?, 'base', 'baja', ?, ?)", est.zonaDeClave(clave), n, p2, p3, patron, cap, en);
+      }
+      for (const s of all('SELECT id, zona, patron, nombre FROM sugerencias')) { if (!ZONAS.includes(s.zona)) run('UPDATE sugerencias SET zona = ? WHERE id = ?', est.clasificar(s.zona, s.patron, s.nombre, null).zona, s.id); }
+      run('UPDATE rutina_items SET zona = (SELECT zona FROM ejercicios WHERE ejercicios.id = rutina_items.ejercicio_id) WHERE ejercicio_id IS NOT NULL');
+      setConfig('biblioteca_v6', '1');
+    }
+    for (const f of all('SELECT id, nombre FROM formatos WHERE patrones IS NULL OR capacidades IS NULL OR energias IS NULL')) {
+      const d = est.defaultsFormato(f.nombre);
+      run('UPDATE formatos SET patrones = COALESCE(patrones, ?), capacidades = COALESCE(capacidades, ?), energias = COALESCE(energias, ?) WHERE id = ?', d.patrones, d.capacidades, d.energias, f.id);
+    }
+    // la agenda general pasa a ser la agenda de la semana actual (las semanas siguientes la heredan hasta que se cambie)
+    if (!get('SELECT 1 AS x FROM semanas_cfg WHERE agenda = 1 LIMIT 1') && get('SELECT 1 AS x FROM agenda LIMIT 1')) {
+      const lunes = lunesDe(nowAR().fecha);
+      for (const a of all('SELECT dia, hora, formato_id, profesor_id FROM agenda')) run('INSERT OR IGNORE INTO agenda_semana (semana, dia, hora, formato_id, profesor_id) VALUES (?,?,?,?,?)', lunes, a.dia, a.hora, a.formato_id, a.profesor_id);
+      run('INSERT INTO semanas_cfg (semana, agenda) VALUES (?, 1) ON CONFLICT(semana) DO UPDATE SET agenda = 1', lunes);
+    }
+  });
+}
+if (sync.NODO !== 'nube') { seed(); seedV1(); seedV2(); seedV6(); }
 
 module.exports = { db, all, get, run, tx, getConfig, setConfig, DATA_DIR, DB_PATH, ZONAS, seedV1, seedV2, PAISES };

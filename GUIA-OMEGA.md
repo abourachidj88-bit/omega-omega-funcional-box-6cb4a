@@ -10,6 +10,9 @@ Aplicación web (se usa desde el navegador y se instala en el celular como app, 
 
 Copia de seguridad automática **todos los días a las 22:00** (hora de Argentina).
 
+## Versión 6
+Planificación semanal por pasos: 1) **Agenda semanal** (qué formato en cada horario, con calendario de semanas y botón para copiar la semana anterior); 2) **Agenda Staff** (profesor de cada clase; copiar staff); 3) **Formatos e Intervalos** (estaciones, rounds, tiempos y estímulos de cada formato, por semana; guardar y copiar); 4) **Planificación Semanal** (la IA arma los circuitos); luego **Rutinas Personalizadas** y **Biblioteca** (agrupada por patrones de movimiento, capacidades físicas y sistema energético). Cualquier cambio impacta de inmediato en la app de los clientes. Detalle en CHANGELOG.md.
+
 ## Versión 5
 - **Rounds por formato:** en Planificación → Formatos e Intervalos → *Editar Formatos* elegís 3, 2 o 1 rounds por formato. Con menos de 3 rounds se usan las progresiones más exigentes de cada ejercicio. Flex y Z7 vienen con 2.
 - **Aplicación de escritorio:** el icono OMEGA abre una ventana propia (no usa el navegador). Requiere Windows 10 o más nuevo; el instalador detecta solo si es de 32 o 64 bits. “OMEGA (navegador)” del menú Inicio abre la versión de siempre.

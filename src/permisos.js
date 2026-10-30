@@ -61,6 +61,7 @@ const REGLAS = [
   ['GET', '/api/planificacion', 'plan.semana'], ['GET', '/api/planificacion/circuito/:x', 'plan.semana'], ['GET', '/api/planificacion/circuito/:x/sugerencias', 'plan.semana'],
   ['POST', '/api/planificacion/generar', 'plan.generar'], ['POST', '/api/planificacion/eliminar', 'plan.generar'], ['POST', '/api/planificacion/circuito/:x/regenerar', 'plan.generar'],
   ['PUT', '/api/planificacion/circuito/:x/slot', 'plan.generar'], ['PUT', '/api/planificacion/modo', 'plan.generar'],
+  ['PUT', '/api/agenda-semanal', 'plan.config'], ['POST', '/api/agenda-semanal/copiar', 'plan.config'], ['PUT', '/api/formatos-semana', 'plan.config'], ['POST', '/api/formatos-semana/copiar', 'plan.config'], ['POST', '/api/staff/copiar', 'plan.staff_editar'],
   ['PUT', '/api/staff/agenda', 'plan.staff_editar'], ['PUT', '/api/staff/sesion', 'plan.staff_editar'],
   ['POST', '/api/rutinas/asignar', 'plan.rutinas_editar'], ['DELETE', '/api/rutinas/asignaciones/:x', 'plan.rutinas_editar'], ['PUT', '/api/rutinas-dia', 'plan.rutinas_editar'],
   ['POST', '/api/rutinas', 'plan.rutinas_editar'], ['PUT', '/api/rutinas/:x', 'plan.rutinas_editar'], ['DELETE', '/api/rutinas/:x', 'plan.rutinas_editar'],

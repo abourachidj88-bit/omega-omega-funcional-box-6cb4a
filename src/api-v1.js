@@ -5,6 +5,7 @@ const { all, get, run, tx, getConfig, setConfig, ZONAS } = require('./db');
 const { nowAR, addDays, diffDays, dowDe, lunesDe, esFecha } = require('./util');
 const { semaforoAlta } = require('./semaforos');
 const planner = require('./planner');
+const semana = require('./semana');
 const sync = require('./sync');
 const v2 = require('./api-v2');
 const permisos = require('./permisos');
@@ -93,11 +94,12 @@ function generarSugerencias(clave, nombre) {
   const base = (fam ? fam.ej : GENERICOS(nombre)).slice(0, 8);
   let n = 0;
   tx(() => {
-    for (const [zona, ej, p2, p3, patron] of base) {
+    for (let [zona, ej, p2, p3, patron] of base) {
+      zona = require('./estimulos').clasificar(zona, patron, ej, null).zona;       // las familias de equipos usan las zonas del cuerpo: se pasan al patrón de movimiento
       if (!ZONAS.includes(zona)) continue;
       if (get('SELECT 1 AS x FROM ejercicios WHERE activo = 1 AND zona = ? AND nombre = ? COLLATE NOCASE', zona, ej)) continue;
       if (get("SELECT 1 AS x FROM sugerencias WHERE estado = 'pendiente' AND zona = ? AND nombre = ? COLLATE NOCASE", zona, ej)) continue;
-      run('INSERT INTO sugerencias (equipo_clave, zona, nombre, prog2, prog3, patron, creado) VALUES (?,?,?,?,?,?,?)', clave, zona, ej, p2, p3, patron || PATRON_ZONA[zona] || 'sentadilla', new Date().toISOString());
+      run('INSERT INTO sugerencias (equipo_clave, zona, nombre, prog2, prog3, patron, creado) VALUES (?,?,?,?,?,?,?)', clave, zona, ej, p2, p3, patron || require('./estimulos').ILUSTRACION[require('./estimulos').claveDeZona(zona)] || 'sentadilla', new Date().toISOString());
       n++;
     }
   });
@@ -200,7 +202,7 @@ function profesorDeClase(fecha, hora) {
   const s = get('SELECT profesor_id FROM sesiones WHERE fecha = ? AND hora = ?', fecha, hora);
   let pid = s ? s.profesor_id : null;
   let origen = 'excepcion';
-  if (!pid) { const a = get('SELECT profesor_id FROM agenda WHERE dia = ? AND hora = ?', dowDe(fecha), hora); pid = a ? a.profesor_id : null; origen = 'agenda'; }
+  if (!pid) { const a = semana.celda(fecha, hora); pid = a ? a.profesor_id : null; origen = 'agenda'; }
   if (!pid) return null;
   const u = get('SELECT id, nombre FROM usuarios WHERE id = ?', pid);
   return u ? { id: u.id, nombre: u.nombre, origen } : null;
@@ -210,7 +212,7 @@ function agendaStaff(desde) {
   const dias = [];
   for (let i = 0; i < 7; i++) {
     const fecha = addDays(desde, i);
-    const filas = all('SELECT hora, formato_id FROM agenda WHERE dia = ? AND formato_id IS NOT NULL ORDER BY hora', dowDe(fecha));
+    const filas = semana.agendaDe(fecha);
     dias.push({ fecha, dia: dowDe(fecha), clases: filas.map(a => {
       const f = formatos.get(a.formato_id);
       return { hora: a.hora, formato: f ? { id: f.id, nombre: f.nombre, color: f.color } : null, profesor: profesorDeClase(fecha, a.hora) };
@@ -413,7 +415,8 @@ function registrar(c) {
   route('GET', '/api/sugerencias', STAFF, () => sugerenciasPend());
   function aceptar(s) {
     if (!get('SELECT 1 AS x FROM ejercicios WHERE activo = 1 AND zona = ? AND nombre = ? COLLATE NOCASE', s.zona, s.nombre)) {
-      run("INSERT INTO ejercicios (zona, nombre, prog2, prog3, equipo, unidades, patron, origen) VALUES (?,?,?,?,?,1,?,'sugerido')", s.zona, s.nombre, s.prog2, s.prog3, s.equipo_clave, s.patron || PATRON_ZONA[s.zona] || 'sentadilla');
+      const cl = require('./estimulos').clasificar(s.zona, s.patron, s.nombre, null);
+      run("INSERT INTO ejercicios (zona, nombre, prog2, prog3, equipo, unidades, patron, origen, capacidad, energia) VALUES (?,?,?,?,?,1,?,'sugerido',?,?)", s.zona, s.nombre, s.prog2, s.prog3, s.equipo_clave, s.patron || require('./estimulos').ILUSTRACION[require('./estimulos').claveDeZona(s.zona)] || 'sentadilla', cl.capacidad, cl.energia);
     }
     run("UPDATE sugerencias SET estado = 'aceptada' WHERE id = ?", s.id);
   }
@@ -434,7 +437,7 @@ function registrar(c) {
       for (const x of b.celdas) {
         const dia = parseInt(x.dia, 10), hora = parseInt(x.hora, 10), pid = intOpc(x.profesor_id);
         if (pid && !get("SELECT 1 AS y FROM usuarios WHERE id = ? AND rol IN ('admin','profesor')", pid)) throw bad('Profesor inválido');
-        run('UPDATE agenda SET profesor_id = ? WHERE dia = ? AND hora = ?', pid, dia, hora);
+        semana.asignarProfesor(lunesDe(b.semana && esFecha(b.semana) ? b.semana : nowAR().fecha), dia, hora, pid);
       }
     });
     return { ok: true };
@@ -442,17 +445,18 @@ function registrar(c) {
   route('PUT', '/api/staff/sesion', ADM, async ({ req }) => {
     const b = await readBody(req);
     const fecha = requireFecha(b.fecha), hora = parseInt(b.hora, 10), pid = intOpc(b.profesor_id);
-    const a = get('SELECT formato_id FROM agenda WHERE dia = ? AND hora = ?', dowDe(fecha), hora);
+    const a = semana.celda(fecha, hora);
     if (!a || !a.formato_id) throw bad('Ese día no hay clase en ese horario');
     if (pid && !get("SELECT 1 AS y FROM usuarios WHERE id = ? AND rol IN ('admin','profesor')", pid)) throw bad('Profesor inválido');
     run('INSERT INTO sesiones (fecha, hora, formato_id, profesor_id) VALUES (?,?,?,?) ON CONFLICT(fecha, hora) DO UPDATE SET profesor_id = excluded.profesor_id', fecha, hora, a.formato_id, pid);
+    semana.asignarProfesor(lunesDe(fecha), dowDe(fecha), hora, pid);
     return { ok: true };
   });
   route('GET', '/api/staff/mis-turnos', STAFF, ({ user }) => {
     const hoy = nowAR().fecha, turnos = [];
     for (let i = 0; i < 14; i++) {
       const fecha = addDays(hoy, i);
-      for (const a of all('SELECT hora, formato_id FROM agenda WHERE dia = ? AND formato_id IS NOT NULL ORDER BY hora', dowDe(fecha))) {
+      for (const a of semana.agendaDe(fecha)) {
         const p = profesorDeClase(fecha, a.hora);
         if (p && p.id === user.id) { const f = get('SELECT nombre, color FROM formatos WHERE id = ?', a.formato_id); { const ci = get('SELECT id FROM circuitos WHERE fecha = ? AND formato_id = ?', fecha, a.formato_id); turnos.push({ fecha, hora: a.hora, formato: f ? f.nombre : '', color: f ? f.color : null, circuito_id: ci ? ci.id : null }); } }
       }

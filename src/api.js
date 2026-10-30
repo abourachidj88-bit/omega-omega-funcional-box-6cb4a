@@ -7,6 +7,8 @@ const { hashPassword, verifyPassword, emitirSesion, usuarioDeToken, emitirQR, va
 const { nowAR, addDays, diffDays, dowDe, lunesDe, addMeses, mesesEntre, esFecha } = require('./util');
 const { bajaEfectiva, semaforoAlta, semaforoAsistencia } = require('./semaforos');
 const planner = require('./planner');
+const semana = require('./semana');
+const estim = require('./estimulos');
 const backup = require('./backup');
 const VERSION = require('./version');
 const sync = require('./sync');
@@ -200,12 +202,12 @@ function renovarCliente(id, b) {
 }
 
 // ------------------------------------------------------------ asistencias
-function horasDeAgenda(dia) {
-  return all('SELECT hora FROM agenda WHERE dia = ? AND formato_id IS NOT NULL ORDER BY hora', dia).map(r => r.hora);
+function horasDeAgenda(fecha) {
+  return semana.horasDe(fecha);
 }
 // Identifica automáticamente la clase según el horario: se admite entrar hasta 15 min antes del turno
 function claseAhora(ahora) {
-  const horas = horasDeAgenda(ahora.dow);
+  const horas = horasDeAgenda(ahora.fecha);
   let h = ahora.hora;
   if (ahora.min >= 45 && horas.includes(h + 1)) h = h + 1;
   return horas.includes(h) ? h : null;
@@ -213,7 +215,7 @@ function claseAhora(ahora) {
 function asegurarSesion(fecha, hora) {
   let s = get('SELECT * FROM sesiones WHERE fecha = ? AND hora = ?', fecha, hora);
   if (!s) {
-    const a = get('SELECT formato_id FROM agenda WHERE dia = ? AND hora = ?', dowDe(fecha), hora);
+    const a = semana.celda(fecha, hora);
     run('INSERT OR IGNORE INTO sesiones (fecha, hora, formato_id) VALUES (?,?,?)', fecha, hora, a ? a.formato_id : null);
     s = get('SELECT * FROM sesiones WHERE fecha = ? AND hora = ?', fecha, hora);
   }
@@ -236,12 +238,12 @@ function dashboard(fecha) {
   const hoy = nowAR().fecha;
   const { capacidad } = planner.cfg();
   const dia = dowDe(fecha);
-  const horas = new Set(horasDeAgenda(dia));
+  const horas = new Set(horasDeAgenda(fecha));
   for (const r of all("SELECT DISTINCT hora FROM asistencias WHERE fecha = ? AND origen <> 'rutina'", fecha)) horas.add(r.hora);
   const formatos = new Map(all('SELECT * FROM formatos').map(f => [f.id, f]));
   const porHora = [...horas].sort((a, b) => a - b).map(h => {
     const s = get('SELECT * FROM sesiones WHERE fecha = ? AND hora = ?', fecha, h);
-    const ag = get('SELECT formato_id FROM agenda WHERE dia = ? AND hora = ?', dia, h);
+    const ag = semana.celda(fecha, h);
     const fid = s ? s.formato_id : (ag ? ag.formato_id : null);
     const f = fid ? formatos.get(fid) : null;
     const qr = get("SELECT COUNT(*) AS n FROM asistencias WHERE fecha = ? AND hora = ? AND origen = 'qr'", fecha, h).n;
@@ -260,10 +262,10 @@ function dashboard(fecha) {
   });
   const porHorario = {};
   for (const i of ineficiencias) { const k = String(i.hora); porHorario[k] = (porHorario[k] || 0) + 1; }
-  const semana = [];
+  const semanaAsist = [];
   for (let i = 13; i >= 0; i--) {
     const d = addDays(fecha, -i);
-    semana.push({ fecha: d, total: get('SELECT COUNT(*) AS n FROM asistencias WHERE fecha = ?', d).n });
+    semanaAsist.push({ fecha: d, total: get('SELECT COUNT(*) AS n FROM asistencias WHERE fecha = ?', d).n });
   }
   const cl = listaClientes({ rol: 'profesor' });
   const kpis = {
@@ -274,7 +276,7 @@ function dashboard(fecha) {
     asistencias_dia: porHora.reduce((a, h) => a + h.total, 0),
     rutinas_dia: get("SELECT COUNT(*) AS n FROM asistencias WHERE fecha = ? AND origen = 'rutina'", fecha).n,
   };
-  return { fecha, capacidad, porHora, semana, kpis, ineficiencias, ineficiencias_por_horario: porHorario };
+  return { fecha, capacidad, porHora, semana: semanaAsist, kpis, ineficiencias, ineficiencias_por_horario: porHorario };
 }
 
 // ------------------------------------------------------------ finanzas
@@ -536,7 +538,9 @@ route('GET', '/api/mi-perfil', ['cliente'], ({ user }) => {
 });
 
 // --- Módulo 2: planificación
-route('GET', '/api/formatos', TODOS, () => all('SELECT * FROM formatos WHERE activo = 1 ORDER BY orden, id'));
+// Formatos con la configuración de la semana pedida (por defecto la actual): estaciones, intervalos, rounds y estímulos
+const lunesQ = (v) => lunesDe(v && esFecha(String(v)) ? String(v) : nowAR().fecha);
+route('GET', '/api/formatos', TODOS, ({ query }) => semana.formatosDeSemana(lunesQ(query.semana)).formatos);
 route('PUT', '/api/formatos', ADM, async ({ req }) => {
   const b = await readBody(req);
   if (!Array.isArray(b.formatos)) throw bad('Formato inválido');
@@ -564,24 +568,27 @@ route('PUT', '/api/formatos', ADM, async ({ req }) => {
       }
     });
   });
-  return all('SELECT * FROM formatos WHERE activo = 1 ORDER BY orden, id');
+  { const d0 = require('./estimulos'); for (const f of all('SELECT id, nombre FROM formatos WHERE patrones IS NULL')) { const d = d0.defaultsFormato(f.nombre); run('UPDATE formatos SET patrones = ?, capacidades = ?, energias = ? WHERE id = ?', d.patrones, d.capacidades, d.energias, f.id); } }
+  return semana.formatosDeSemana(lunesQ(b.semana)).formatos;
 });
 route('DELETE', '/api/formatos/:id', ADM, ({ params }) => {
   run('UPDATE formatos SET activo = 0 WHERE id = ?', Number(params.id));
   run('UPDATE agenda SET formato_id = NULL WHERE formato_id = ?', Number(params.id));
   return { ok: true };
 });
-route('GET', '/api/agenda', STAFF, () => all('SELECT dia, hora, formato_id FROM agenda ORDER BY dia, hora'));
+route('GET', '/api/agenda', STAFF, ({ query }) => semana.celdasDe(lunesQ(query.semana)).celdas.map(c => ({ dia: c.dia, hora: c.hora, formato_id: c.formato_id })));
 route('PUT', '/api/agenda', ADM, async ({ req }) => {
   const b = await readBody(req);
   if (!Array.isArray(b.celdas)) throw bad('Formato inválido');
-  tx(() => {
-    for (const c of b.celdas) {
-      const dia = parseInt(c.dia, 10), hora = parseInt(c.hora, 10);
-      if (!(dia >= 1 && dia <= 7) || !(hora >= 0 && hora <= 23)) throw bad('Día u hora inválidos');
-      run('INSERT INTO agenda (dia, hora, formato_id) VALUES (?,?,?) ON CONFLICT(dia, hora) DO UPDATE SET formato_id = excluded.formato_id', dia, hora, c.formato_id ? Number(c.formato_id) : null);
-    }
-  });
+  // (ruta anterior, se mantiene por compatibilidad: modifica la agenda de la semana indicada, por defecto la actual)
+  const lunes = lunesQ(b.semana);
+  const mapa = new Map(semana.celdasDe(lunes).celdas.filter(c => c.formato_id).map(c => [c.dia + ':' + c.hora, { dia: c.dia, hora: c.hora, formato_id: c.formato_id }]));
+  for (const c of b.celdas) {
+    const dia = parseInt(c.dia, 10), hora = parseInt(c.hora, 10);
+    if (!(dia >= 1 && dia <= 7) || !(hora >= 0 && hora <= 23)) throw bad('Día u hora inválidos');
+    if (c.formato_id) mapa.set(dia + ':' + hora, { dia, hora, formato_id: Number(c.formato_id) }); else mapa.delete(dia + ':' + hora);
+  }
+  semana.guardarAgenda(lunes, [...mapa.values()]);
   return { ok: true };
 });
 route('GET', '/api/equipamiento', STAFF, () => all('SELECT * FROM equipamiento ORDER BY nombre'));
@@ -596,7 +603,7 @@ route('PUT', '/api/equipamiento', ADM, async ({ req }) => {
 });
 route('GET', '/api/config-clase', STAFF, () => planner.cfg());
 
-const COLS_EJ = 'id, zona, nombre, prog2, prog3, equipo, unidades, descripcion, video, activo, patron, origen, intensidad, (img1 IS NOT NULL) AS foto1, (img2 IS NOT NULL) AS foto2, (img3 IS NOT NULL) AS foto3';
+const COLS_EJ = 'id, zona, nombre, prog2, prog3, equipo, unidades, descripcion, video, activo, patron, origen, intensidad, capacidad, energia, (img1 IS NOT NULL) AS foto1, (img2 IS NOT NULL) AS foto2, (img3 IS NOT NULL) AS foto3';
 route('GET', '/api/ejercicios', STAFF, ({ query }) => {
   const rows = query.zona ? all('SELECT ' + COLS_EJ + ' FROM ejercicios WHERE activo = 1 AND zona = ? ORDER BY nombre', query.zona) : all('SELECT ' + COLS_EJ + ' FROM ejercicios WHERE activo = 1 ORDER BY zona, nombre');
   return rows;
@@ -629,15 +636,16 @@ function validarPatron(v, def) {
 route('POST', '/api/ejercicios', STAFF, async ({ req, user }) => {
   const b = await readBody(req);
   const zona = str(b.zona, 40), nombre = str(b.nombre, 120), p2 = str(b.prog2, 120), p3 = str(b.prog3, 120);
-  if (!ZONAS.includes(zona)) throw bad('Zona inválida');
+  if (!ZONAS.includes(zona)) throw bad('Elegí el patrón de movimiento');
   if (!nombre || !p2 || !p3) throw bad('Completá el ejercicio y sus dos progresiones');
   const eq = str(b.equipo, 40) || 'ninguno';
   if (!get('SELECT 1 AS x FROM equipamiento WHERE clave = ?', eq)) throw bad('Equipo inválido');
   if (get('SELECT 1 AS x FROM ejercicios WHERE activo = 1 AND zona = ? AND nombre = ? COLLATE NOCASE', zona, nombre)) throw bad('Ya existe un ejercicio con ese nombre en ' + zona);
-  const patron = validarPatron(b.patron, PATRON_ZONA[zona] || 'sentadilla');
-  const r = run("INSERT INTO ejercicios (zona, nombre, prog2, prog3, equipo, unidades, descripcion, patron, img1, img2, img3, origen, intensidad) VALUES (?,?,?,?,?,?,?,?,?,?,?,'propio',?)",
+  const patron = validarPatron(b.patron, estim.ILUSTRACION[estim.claveDeZona(zona)] || 'sentadilla');
+  const capac = estim.aTexto(estim.lista(b.capacidades ?? b.capacidad, estim.CLAVES.capacidades)) || 'fuerza', energ = estim.aTexto(estim.lista(b.energias ?? b.energia, estim.CLAVES.energias)) || 'aerobico';
+  const r = run("INSERT INTO ejercicios (zona, nombre, prog2, prog3, equipo, unidades, descripcion, patron, img1, img2, img3, origen, intensidad, capacidad, energia) VALUES (?,?,?,?,?,?,?,?,?,?,?,'propio',?,?,?)",
     zona, nombre, p2, p3, eq, Math.max(1, parseInt(b.unidades || 1, 10)), str(b.descripcion, 500) || null, patron,
-    validarImagen(b.img1) ?? null, validarImagen(b.img2) ?? null, validarImagen(b.img3) ?? null, validarIntensidad(b.intensidad, v2.intensidadDe(zona, patron, nombre)));
+    validarImagen(b.img1) ?? null, validarImagen(b.img2) ?? null, validarImagen(b.img3) ?? null, validarIntensidad(b.intensidad, v2.intensidadDe(zona, patron, nombre)), capac, energ);
   return { id: Number(r.lastInsertRowid) };
 });
 route('PUT', '/api/ejercicios/:id', STAFF, async ({ req, params }) => {
@@ -647,12 +655,14 @@ route('PUT', '/api/ejercicios/:id', STAFF, async ({ req, params }) => {
   const eq = b.equipo !== undefined ? str(b.equipo, 40) : e.equipo;
   if (!get('SELECT 1 AS x FROM equipamiento WHERE clave = ?', eq)) throw bad('Equipo inválido');
   const zona = b.zona !== undefined ? str(b.zona, 40) : e.zona;
-  if (!ZONAS.includes(zona)) throw bad('Zona inválida');
+  if (!ZONAS.includes(zona)) throw bad('Elegí el patrón de movimiento');
+  const capac = b.capacidades !== undefined || b.capacidad !== undefined ? (estim.aTexto(estim.lista(b.capacidades ?? b.capacidad, estim.CLAVES.capacidades)) || e.capacidad || 'fuerza') : e.capacidad;
+  const energ = b.energias !== undefined || b.energia !== undefined ? (estim.aTexto(estim.lista(b.energias ?? b.energia, estim.CLAVES.energias)) || e.energia || 'aerobico') : e.energia;
   const img = (k) => { const v = validarImagen(b[k]); return v === undefined ? e[k] : v; };
-  run('UPDATE ejercicios SET zona=?, nombre=?, prog2=?, prog3=?, equipo=?, unidades=?, descripcion=?, patron=?, img1=?, img2=?, img3=?, intensidad=? WHERE id=?',
+  run('UPDATE ejercicios SET zona=?, nombre=?, prog2=?, prog3=?, equipo=?, unidades=?, descripcion=?, patron=?, img1=?, img2=?, img3=?, intensidad=?, capacidad=?, energia=? WHERE id=?',
     zona, str(b.nombre ?? e.nombre, 120) || e.nombre, str(b.prog2 ?? e.prog2, 120) || e.prog2, str(b.prog3 ?? e.prog3, 120) || e.prog3, eq,
     Math.max(1, parseInt(b.unidades ?? e.unidades, 10)), b.descripcion !== undefined ? (str(b.descripcion, 500) || null) : e.descripcion,
-    validarPatron(b.patron, e.patron || PATRON_ZONA[zona] || 'sentadilla'), img('img1'), img('img2'), img('img3'), validarIntensidad(b.intensidad, e.intensidad || v2.intensidadDe(zona, e.patron, e.nombre)), e.id);
+    validarPatron(b.patron, e.patron || estim.ILUSTRACION[estim.claveDeZona(zona)] || 'sentadilla'), img('img1'), img('img2'), img('img3'), validarIntensidad(b.intensidad, e.intensidad || v2.intensidadDe(zona, e.patron, e.nombre)), capac, energ, e.id);
   return { ok: true };
 });
 route('DELETE', '/api/ejercicios/:id', ADM, ({ params }) => { run('UPDATE ejercicios SET activo = 0 WHERE id = ?', Number(params.id)); return { ok: true }; });
@@ -757,6 +767,7 @@ v1.registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str, num
 // ------------------------------------------------------------ Versión 2 (país, campañas, reservas, rutinas, deshacer pagos, estado de resultados)
 v2.registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str, num, requireFecha, fechaOpc, soloDigitos, validarFoto, normTel, bajaEfectiva, semaforoAlta, listaClientes });
 require('./api-v4').registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str });
+require('./api-v6').registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str });
 require('./api-v4').registrarV5({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str });
 require('./api-v3').registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str, num, requireFecha, fechaOpc, soloDigitos, normTel, claseAhora, registrarAsistencia, semaforoAlta, horasDeAgenda, asegurarSesion });
 // ------------------------------------------------------------ despacho

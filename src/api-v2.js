@@ -32,7 +32,7 @@ function alRegistrarPago(clienteId) { chequearReferido(clienteId); }
 // Reservas de una clase: son solo informativas (no bloquean). Si superan el límite de materiales se avisa al staff.
 function reservasDeClase(fecha, hora, formato, user) {
   const total = get('SELECT COUNT(*) AS n FROM reservas WHERE fecha = ? AND hora = ?', fecha, hora).n;
-  const f = formato && formato.id ? get('SELECT * FROM formatos WHERE id = ?', formato.id) : null;
+  const f = formato && formato.id ? require('./semana').formatoEf(formato.id, fecha) : null;
   const limite = planner.cfgFormato(f).capacidad;
   const reservada = !!(user && user.rol === 'cliente' && user.cliente_id && get('SELECT 1 AS x FROM reservas WHERE cliente_id = ? AND fecha = ? AND hora = ?', user.cliente_id, fecha, hora));
   return { total, limite, exceso: Math.max(0, total - limite), reservada };
@@ -159,7 +159,7 @@ function registrar(c) {
 
   // --- Reservas (informativas: sin bloqueos ni penalidades)
   const horaClase = (fecha, hora) => {
-    const a = get('SELECT formato_id FROM agenda WHERE dia = ? AND hora = ?', dowDe(fecha), hora);
+    const a = require('./semana').celda(fecha, hora);
     if (!a || !a.formato_id) throw bad('Ese día no hay clase en ese horario');
     return a.formato_id;
   };
@@ -188,7 +188,7 @@ function registrar(c) {
     const fecha = query.fecha && esFecha(query.fecha) ? query.fecha : nowAR().fecha;
     const horas = all('SELECT DISTINCT hora FROM reservas WHERE fecha = ? ORDER BY hora', fecha).map(r => r.hora);
     return { fecha, horas: horas.map(h => {
-      const a = get('SELECT formato_id FROM agenda WHERE dia = ? AND hora = ?', dowDe(fecha), h);
+      const a = require('./semana').celda(fecha, h);
       const f = a && a.formato_id ? get('SELECT id, nombre, color FROM formatos WHERE id = ?', a.formato_id) : null;
       const r = reservasDeClase(fecha, h, f);
       return { hora: h, formato: f, total: r.total, limite: r.limite, exceso: r.exceso,

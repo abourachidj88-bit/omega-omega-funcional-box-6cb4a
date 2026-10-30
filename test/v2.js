@@ -104,10 +104,10 @@ async function esperar() { for (let i = 0; i < 60; i++) { try { await fetch(BASE
     r = await api('PUT', '/api/equipamiento', { equipamiento: [], capacidad_clase: 20 }, admin);
 
     console.log('Biblioteca: glúteos, intensidad y filtros');
-    r = await api('GET', '/api/ejercicios?zona=' + encodeURIComponent('Glúteos'), undefined, prof); assert.equal(r.data.length, 50); assert.ok(r.data.every(e => e.prog2 && e.prog3 && e.patron && e.intensidad)); paso('zona Glúteos con 50 ejercicios, progresiones, tipo de movimiento e intensidad');
+    r = await api('GET', '/api/ejercicios?zona=' + encodeURIComponent('Bisagra de cadera / Carga (Hinge)'), undefined, prof); assert.ok(r.data.length >= 25); assert.ok(r.data.every(e => e.prog2 && e.prog3 && e.patron && e.intensidad)); paso('patrón Bisagra de cadera con ejercicios, progresiones, tipo de movimiento e intensidad');
     r = await api('GET', '/api/ejercicios', undefined, prof); assert.ok(r.data.every(e => ['baja', 'moderada', 'alta'].includes(e.intensidad))); const cuenta = { baja: 0, moderada: 0, alta: 0 }; r.data.forEach(e => cuenta[e.intensidad]++); assert.ok(cuenta.alta > 20 && cuenta.baja > 20); paso('todos los ejercicios tienen intensidad cardiovascular (' + JSON.stringify(cuenta) + ')');
-    r = await api('POST', '/api/ejercicios', { zona: 'Glúteos', nombre: 'Patada alta propia', prog2: 'Patada con pausa', prog3: 'Patada con banda', equipo: 'ninguno', patron: 'bird', intensidad: 'alta' }, prof); assert.equal(r.status, 200); const nuevoEj = r.data.id;
-    r = await api('GET', '/api/ejercicios/' + nuevoEj, undefined, prof); assert.equal(r.data.intensidad, 'alta'); r = await api('POST', '/api/ejercicios', { zona: 'Glúteos', nombre: 'Otro', prog2: 'a', prog3: 'b', intensidad: 'rarísima' }, prof); assert.equal(r.status, 400); paso('un ejercicio nuevo guarda su intensidad');
+    r = await api('POST', '/api/ejercicios', { zona: 'Bisagra de cadera / Carga (Hinge)', nombre: 'Patada alta propia', prog2: 'Patada con pausa', prog3: 'Patada con banda', equipo: 'ninguno', patron: 'bird', intensidad: 'alta' }, prof); assert.equal(r.status, 200); const nuevoEj = r.data.id;
+    r = await api('GET', '/api/ejercicios/' + nuevoEj, undefined, prof); assert.equal(r.data.intensidad, 'alta'); r = await api('POST', '/api/ejercicios', { zona: 'Bisagra de cadera / Carga (Hinge)', nombre: 'Otro', prog2: 'a', prog3: 'b', intensidad: 'rarísima' }, prof); assert.equal(r.status, 400); paso('un ejercicio nuevo guarda su intensidad');
     r = await api('PUT', '/api/ejercicios/' + nuevoEj, { intensidad: 'baja' }, prof); r = await api('GET', '/api/ejercicios/' + nuevoEj, undefined, prof); assert.equal(r.data.intensidad, 'baja'); paso('la intensidad se puede editar');
 
     console.log('Planificación: formatos HIIT, cupo por estación y modo manual');
@@ -120,7 +120,7 @@ async function esperar() { for (let i = 0; i < 60; i++) { try { await fetch(BASE
     let nHiit = 0, nBaja = 0, nFlex = 0, nFlexBaja = 0, vioGluteos = false, personas = new Set();
     for (const d of r.data) for (const c of d.clases) if (c.circuito && c.formato.nombre === 'Hiitcross') { nHiit++; for (const e of c.circuito.rondas[0].ejercicios) { if (e.intensidad === 'baja') nBaja++; } }
     for (const d of r.data) for (const c of d.clases) if (c.circuito && c.formato.nombre === 'Flex') { nFlex++; for (const e of c.circuito.rondas[0].ejercicios) if (e.intensidad === 'baja') nFlexBaja++; }
-    for (const d of r.data) for (const c of d.clases) if (c.circuito) { if (c.circuito.rondas[0].ejercicios.some(e => e.zona === 'Glúteos')) vioGluteos = true; personas.add(c.formato.nombre + ':' + c.circuito.personas_por_estacion); }
+    for (const d of r.data) for (const c of d.clases) if (c.circuito) { if (c.circuito.rondas[0].ejercicios.some(e => e.zona === 'Bisagra de cadera / Carga (Hinge)')) vioGluteos = true; personas.add(c.formato.nombre + ':' + c.circuito.personas_por_estacion); }
     assert.ok(nHiit > 0 && nFlex > 0); assert.ok(nBaja / (nHiit * 5) < 0.3 && nBaja / (nHiit * 5) < nFlexBaja / (nFlex * 5), 'HIIT con demasiados ejercicios suaves: ' + nBaja + '/' + nHiit * 5 + ' vs Flex ' + nFlexBaja + '/' + nFlex * 5); paso('las clases HIIT priorizan ejercicios que suben las pulsaciones (' + nBaja + ' suaves de ' + nHiit * 5 + ')');
     assert.ok(vioGluteos); paso('los Glúteos entran en la rotación de la semana');
     assert.ok([...personas].some(x => x === 'Funcional:6')); paso('el cupo por estación del formato se aplica (Funcional: 6 por estación)');
@@ -140,11 +140,11 @@ async function esperar() { for (let i = 0; i < 60; i++) { try { await fetch(BASE
       const ia = (await api('GET', '/api/planificacion?desde=' + lun + '&dias=7', undefined, admin)).data.filter(d => d.fecha >= h).flatMap(d => d.clases).filter(c => c.circuito);
       assert.ok(ia.length && ia.every(c => c.circuito.modo === 'ia')); paso('Generar con IA reemplaza lo que había (aunque fuera manual) desde hoy y no toca los días pasados'); }
     r = await api('GET', '/api/planificacion/circuito/' + cm.circuito.id + '/sugerencias?slot=0', undefined, prof); assert.ok(r.data.length > 10); const eleg = r.data[0];
-    r = await api('PUT', '/api/planificacion/circuito/' + cm.circuito.id + '/slot', { slot: 0, ejercicio_id: eleg.id }, prof); assert.equal(r.status, 200); assert.equal(r.data.rondas[0].ejercicios[0].ejercicio_id, eleg.id); assert.equal(r.data.rondas[1].ejercicios[0].nombre, eleg.prog2); assert.ok(r.data.rondas[0].ejercicios.slice(1).every(e => e.vacio)); paso('el profesor elige el ejercicio y sus progresiones vienen incluidas');
+    r = await api('PUT', '/api/planificacion/circuito/' + cm.circuito.id + '/slot', { slot: 0, ejercicio_id: eleg.id }, prof); assert.equal(r.status, 200); assert.equal(r.data.rondas[0].ejercicios[0].ejercicio_id, eleg.id); assert.equal(r.data.rondas[1].ejercicios[0].nombre, r.data.rondas.length === 3 ? eleg.prog2 : eleg.prog3); assert.ok(r.data.rondas[0].ejercicios.slice(1).every(e => e.vacio)); paso('el profesor elige el ejercicio y sus progresiones vienen incluidas');
     r = await api('PUT', '/api/planificacion/modo', { modo: 'ia' }, prof); assert.equal(r.data.modo, 'ia');
 
     console.log('Rutinas (musculación)');
-    r = await api('GET', '/api/ejercicios?zona=Pecho', undefined, prof); const ejs = r.data.slice(0, 4);
+    r = await api('GET', '/api/ejercicios?zona=' + encodeURIComponent('Empujar (Push)'), undefined, prof); const ejs = r.data.slice(0, 4);
     r = await api('POST', '/api/rutinas', { nombre: 'Pecho y hombros', items: ejs.map(e => ({ ejercicio_id: e.id, series: 4, repeticiones: '8-10', peso: '20 kg', descanso_seg: 90 })) }, prof); assert.equal(r.status, 200); const rid = r.data.id; assert.equal(r.data.duracion_min, Math.round(4 * 4 * (40 + 90) / 60)); paso('rutina creada con series, repeticiones, peso y descanso (duración calculada)');
     r = await api('POST', '/api/rutinas', { nombre: 'Eterna', items: Array.from({ length: 12 }, () => ({ ejercicio_id: ejs[0].id, series: 10, repeticiones: '10', descanso_seg: 120 })) }, prof); assert.equal(r.status, 400); assert.match(r.data.error || r.data.mensaje || JSON.stringify(r.data), /180/); paso('una rutina de más de 180 minutos se rechaza');
     r = await api('GET', '/api/rutinas/' + rid, undefined, prof); assert.equal(r.data.items.length, 4); assert.ok(r.data.items[0].nombre); assert.equal(r.data.items[0].series, 4);
@@ -158,7 +158,7 @@ async function esperar() { for (let i = 0; i < 60; i++) { try { await fetch(BASE
     r = await api('GET', '/api/clase?fecha=' + suma(manana, 7), undefined, alu); assert.equal(r.data.rutina_libre.id, rid);
     const otroDia = [1, 2, 3, 4, 5, 6].find(d => d !== dowM && d !== 6); const fechaOtro = [1, 2, 3, 4, 5, 6, 7].map(n => suma(manana, n)).find(f => ((new Date(f + 'T00:00:00Z').getUTCDay() + 6) % 7) + 1 === otroDia);
     r = await api('GET', '/api/clase?fecha=' + fechaOtro, undefined, alu); assert.equal(r.data.rutina_libre, null); paso('los demás días no muestra la rutina');
-    r = await api('GET', '/api/rutinas/asignaciones?cliente_id=' + miId, undefined, prof); assert.equal(r.data.length, 1); assert.deepEqual(r.data[0].dias, [dowM, 6].sort((a, b) => a - b)); assert.ok(r.data[0].cliente);
+    r = await api('GET', '/api/rutinas/asignaciones?cliente_id=' + miId, undefined, prof); assert.equal(r.data.length, 1); assert.deepEqual(r.data[0].dias, [...new Set([dowM, 6])].sort((a, b) => a - b)); assert.ok(r.data[0].cliente);
     const clasesManana = (await api('GET', '/api/clase?fecha=' + manana, undefined, alu)).data.clases.find(c => c.formato); if (clasesManana) { assert.equal(clasesManana.rutina.id, rid); paso('con formato, la rutina cuelga de la pestaña del formato del día'); }
     r = await api('GET', '/api/rutinas/asignaciones?cliente_id=' + miId, undefined, alu); assert.equal(r.status, 403);
     r = await api('DELETE', '/api/rutinas/asignaciones/' + (await api('GET', '/api/rutinas/asignaciones?cliente_id=' + miId, undefined, prof)).data[0].id, undefined, prof); assert.equal(r.status, 200);

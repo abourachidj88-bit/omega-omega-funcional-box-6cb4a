@@ -40,6 +40,46 @@ function aplicar(db) {
   add('formatos', 'rondas', 'INTEGER NOT NULL DEFAULT 3');        // cantidad de rounds del formato (1, 2 o 3); con menos de 3 se usan las progresiones más exigentes
   if (eraNueva) db.exec("UPDATE formatos SET rondas = 2 WHERE nombre IN ('Flex', 'Z7') AND activo = 1");   // Flex y Z7 se hacen en 2 rounds
 
+  // ---- Versión 6: agenda y formatos por semana, estaciones y estímulos por formato, biblioteca por estímulos
+  add('formatos', 'estaciones', 'INTEGER');                      // cantidad de estaciones del formato (vacío = la general del gimnasio)
+  add('formatos', 'patrones', 'TEXT');                           // patrones de movimiento que usa (claves separadas por coma)
+  add('formatos', 'capacidades', 'TEXT');                        // capacidades físicas integradas
+  add('formatos', 'energias', 'TEXT');                           // sistema energético
+  add('ejercicios', 'capacidad', 'TEXT');
+  add('ejercicios', 'energia', 'TEXT');
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS semanas_cfg (
+      semana TEXT PRIMARY KEY,
+      agenda INTEGER NOT NULL DEFAULT 0,
+      formatos INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS agenda_semana (
+      semana TEXT NOT NULL,
+      dia INTEGER NOT NULL,
+      hora INTEGER NOT NULL,
+      formato_id INTEGER,
+      profesor_id INTEGER,
+      PRIMARY KEY (semana, dia, hora)
+    );
+    CREATE TABLE IF NOT EXISTS formatos_semana (
+      semana TEXT NOT NULL,
+      formato_id INTEGER NOT NULL,
+      estaciones INTEGER,
+      trabajo_seg INTEGER,
+      descanso_seg INTEGER,
+      sin_trabajo INTEGER NOT NULL DEFAULT 0,
+      sin_descanso INTEGER NOT NULL DEFAULT 0,
+      duracion_min INTEGER,
+      rondas INTEGER NOT NULL DEFAULT 3,
+      cupo_estacion INTEGER,
+      intensidad_min TEXT,
+      patrones TEXT,
+      capacidades TEXT,
+      energias TEXT,
+      PRIMARY KEY (semana, formato_id)
+    );
+  `);
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS campanas (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -39,7 +39,7 @@ function registrar(c) {
     if (!cli) throw bad('Tu usuario no tiene ficha de alumno');
     let clase = null;
     if (hora !== null) {
-      const ag = get('SELECT f.nombre, f.color FROM agenda a JOIN formatos f ON f.id = a.formato_id WHERE a.dia = ? AND a.hora = ?', ahora.dow, hora);
+      const cg = require('./semana').celda(ahora.fecha, hora); const ag = cg ? get('SELECT nombre, color FROM formatos WHERE id = ?', cg.formato_id) : null;
       const reg = get('SELECT origen FROM asistencias WHERE cliente_id = ? AND fecha = ? AND hora = ?', cli.id, ahora.fecha, hora);
       clase = { hora, formato: ag ? { nombre: ag.nombre, color: ag.color } : null, registrada: !!reg && reg.origen !== 'rutina' };
     }

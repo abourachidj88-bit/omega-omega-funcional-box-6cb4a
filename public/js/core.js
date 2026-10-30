@@ -126,7 +126,7 @@ const PERM_VISTA = {
   '/': 'inicio.ver', '/asistencias': 'asist.ver', '/asistencias/cargar': 'asist.registrar', '/asistencias/qr': 'asist.registrar',
   '/clientes': 'cli.ver', '/clientes/nuevo': 'cli.editar', '/clientes/:id': 'cli.ver', '/crm': 'crm.ver',
   '/planificacion': 'plan.semana', '/planificacion/circuito/:id': 'plan.semana', '/planificacion/staff': 'plan.staff', '/planificacion/rutinas': 'plan.rutinas',
-  '/planificacion/biblioteca': 'plan.biblioteca', '/planificacion/formatos': 'plan.config', '/planificacion/agenda': 'plan.config', '/planificacion/equipos': 'plan.config',
+  '/planificacion/biblioteca': 'plan.biblioteca', '/planificacion/formatos': 'plan.semana', '/planificacion/semana': 'plan.semana', '/planificacion/equipos': 'plan.config',
   '/finanzas': 'fin.caja', '/finanzas/mes': 'fin.analisis', '/finanzas/resultados': 'fin.resultados', '/finanzas/presupuesto': 'fin.presupuesto',
 };
 function vista(patron, roles, fn) {

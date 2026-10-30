@@ -82,7 +82,7 @@ const env = { ...process.env, DATA_DIR: DATA, PORT: String(PORT), HOST: '127.0.0
   const res = await page.locator('#resultado').innerText(); log('  QR: ' + res.replace(/\n/g, ' | ').slice(0, 90));
   if (!/Ana Garc/.test(res) && !/No hay una clase/.test(res)) problems.push('el QR de Ana no se registró: ' + res);
   await page.screenshot({ path: path.join(SHOTS, 'a12-escaner-ok.png') });
-  await ver(page, '/planificacion', 'a13-semana');
+  await ver(page, '/planificacion/semana', 'a13-semana');
   await page.click('.clase-row'); await page.waitForSelector('.tablewrap'); await page.waitForTimeout(300);
   await page.screenshot({ path: path.join(SHOTS, 'a14-circuito.png'), fullPage: true });
   await page.click('[data-rep="0"]'); await page.waitForSelector('[data-e]'); await page.screenshot({ path: path.join(SHOTS, 'a15-reemplazar.png') });
@@ -91,10 +91,11 @@ const env = { ...process.env, DATA_DIR: DATA, PORT: String(PORT), HOST: '127.0.0
   await page.screenshot({ path: path.join(SHOTS, 'a16-cronometro.png') }); await page.click('.modal [data-close]');
   await page.click('#b-list'); await page.waitForSelector('.pl-item'); await page.screenshot({ path: path.join(SHOTS, 'a17-videos.png') }); await page.click('.modal [data-close]');
   await ver(page, '/planificacion/formatos', 'a18-formatos');
-  await page.click('#p2'); await page.waitForSelector('.modal input'); await page.screenshot({ path: path.join(SHOTS, 'a19-trabajo.png') }); await page.click('.modal [data-close]');
-  await ver(page, '/planificacion/agenda', 'a20-agenda');
+  await page.waitForSelector('input[data-g="patrones"]'); await page.screenshot({ path: path.join(SHOTS, 'a19-trabajo.png'), fullPage: true });
+  { const n = await page.locator('.card input[data-e]').count(); if (n < 1) problems.push('formatos sin estaciones por formato'); const g = await page.locator('input[data-g="capacidades"]').count(); if (g < 4) problems.push('faltan capacidades físicas: ' + g); }
+  await ver(page, '/planificacion', 'a20-agenda');
   await ver(page, '/planificacion/biblioteca', 'a21-biblioteca');
-  const filas = await page.locator('tbody tr').count(); log('  ejercicios en la primera zona: ' + filas); if (filas < 20) problems.push('zona con menos de 20 ejercicios');
+  const filas = await page.locator('tbody tr').count(); log('  ejercicios en el primer patrón: ' + filas); if (filas < 20) problems.push('zona con menos de 20 ejercicios');
   await ver(page, '/planificacion/equipos', 'a22-equipos');
   await ver(page, '/finanzas', 'a23-finanzas');
   await ver(page, '/finanzas/mes', 'b01-fin-mes');
@@ -137,11 +138,11 @@ const env = { ...process.env, DATA_DIR: DATA, PORT: String(PORT), HOST: '127.0.0
   await page.screenshot({ path: path.join(SHOTS, 'c09-visita-recomendado.png') });
   await page.evaluate(() => document.querySelectorAll('.modal [data-close]').forEach(b => b.click()));
   await ver(page, '/planificacion/biblioteca', 'c10-biblioteca-v2');
-  await page.click('#nuevo'); await page.waitForSelector('[name=patron]'); await page.selectOption('[name=zona]', 'Glúteos'); await page.waitForTimeout(150);
-  { const n = await page.locator('[name=patron] option').count(); log('  tipos de movimiento para Glúteos: ' + n); if (n < 1 || n > 15) problems.push('filtro encadenado sospechoso: ' + n); }
+  await page.click('#nuevo'); await page.waitForSelector('[name=patron]'); await page.selectOption('[name=zona]', 'Empujar (Push)'); await page.waitForTimeout(150);
+  { const n = await page.locator('[name=patron] option').count(); log('  tipos de movimiento para Empujar: ' + n); if (n < 1 || n > 15) problems.push('filtro encadenado sospechoso: ' + n); }
   await page.screenshot({ path: path.join(SHOTS, 'c11-ejercicio-nuevo.png') });
   await page.evaluate(() => document.querySelectorAll('.modal [data-close]').forEach(b => b.click()));
-  await ver(page, '/planificacion/agenda', 'c12-agenda-7-23');
+  await ver(page, '/planificacion', 'c12-agenda-7-23');
   { const n = await page.locator('select[data-d="1"]').count(); if (n !== 17) problems.push('la agenda no tiene 17 horarios (7 a 23): ' + n); }
   await page.click('#btn-notif'); await page.waitForSelector('.modal'); await page.screenshot({ path: path.join(SHOTS, 'c13-avisos.png') });
   await page.evaluate(() => document.querySelectorAll('.modal [data-close]').forEach(b => b.click()));

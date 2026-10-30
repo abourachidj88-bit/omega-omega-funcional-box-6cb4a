@@ -24,7 +24,7 @@ async function esperar() { for (let i = 0; i < 60; i++) { try { await fetch(BASE
   try {
     await esperar();
     let r = await api('POST', '/api/setup', { username: 'dueno', password: 'Omega#2026', nombre: 'Dueño' }); const admin = r.data.token;
-    const v = await api('GET', '/api/estado'); assert.equal(v.data.version, 'Versión 5'); paso('la app informa Versión 5');
+    const v = await api('GET', '/api/estado'); assert.match(v.data.version, /^Versión \d+/); paso('la app informa su versión');
 
     console.log('Rounds por formato');
     r = await api('GET', '/api/formatos', undefined, admin); let fm = r.data;

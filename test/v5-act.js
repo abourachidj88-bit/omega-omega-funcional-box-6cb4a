@@ -20,7 +20,7 @@ function copiaApp(rev, romper) {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'omega-nube-'));
   for (const f of ['server.js', 'lanzador.js', 'package.json']) fs.copyFileSync(path.join(ROOT, f), path.join(d, f));
   for (const c of ['src', 'public', 'scripts']) fs.cpSync(path.join(ROOT, c), path.join(d, c), { recursive: true });
-  fs.writeFileSync(path.join(d, 'src', 'version.js'), "'use strict';\nmodule.exports = { numero: 5, nombre: 'Versión 5', fecha: '2026-10-30', revision: " + rev + " };\n");
+  fs.writeFileSync(path.join(d, 'src', 'version.js'), "'use strict';\nmodule.exports = { numero: 6, nombre: 'Versión 6', fecha: '2026-10-30', revision: " + rev + " };\n");
   if (romper) fs.appendFileSync(path.join(d, 'server.js'), "\nthrow new Error('versión rota a propósito');\n");
   return d;
 }

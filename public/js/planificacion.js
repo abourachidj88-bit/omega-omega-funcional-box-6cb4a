@@ -1,7 +1,14 @@
 'use strict';
-// ---------- Módulo 2: Planificación de clases ----------
-const ZONAS_UI = ['Resistencia aeróbica', 'Piernas', 'Glúteos', 'Core', 'Espalda', 'Pecho', 'Hombros', 'Bíceps', 'Tríceps'];
+// ---------- Módulo 2: Planificación de clases (Versión 6) ----------
+// Los patrones de movimiento reemplazan a las antiguas "zonas": son el agrupamiento principal de la biblioteca.
+const ZONAS_UI = ['Empujar (Push)', 'Tirar / Traccionar (Pull)', 'Agacharse / Sentadilla (Squat)', 'Bisagra de cadera / Carga (Hinge)', 'Bisagra de rodilla', 'Rotación y anti-rotación', 'Locomoción y transporte'];
+const ILUSTRA_DE_PATRON = { empujar: 'flexion', tirar: 'remo_inc', sentadilla: 'sentadilla', bisagra_cadera: 'bisagra', bisagra_rodilla: 'zancada', rotacion: 'plancha', locomocion: 'sprint' };
+const ZONA_PATRON = {}; // etiqueta del patrón -> ilustración por defecto
+ZONAS_UI.forEach((z, i) => { ZONA_PATRON[z] = Object.values(ILUSTRA_DE_PATRON)[i]; });
 const PATRON_NOMBRE = { sentadilla: 'Sentadilla', zancada: 'Zancada / desplante', bisagra: 'Bisagra de cadera (peso muerto)', puente: 'Puente de glúteos', subida: 'Subida al cajón', salto: 'Salto', saltar: 'Saltar la soga', talones: 'Talones al glúteo', sprint: 'Carrera', lateral: 'Desplazamiento lateral', escalador: 'Escalador', burpee: 'Burpee', swing: 'Swing', slam: 'Golpe de pelota (slam)', plancha: 'Plancha', plancha_lat: 'Plancha lateral', abdominal: 'Abdominal', elev_piernas: 'Elevación de piernas', bicho: 'Bicho muerto', bird: 'Perro de caza', rueda: 'Rueda abdominal', ruso: 'Giro ruso', remo_inc: 'Remo inclinado', tiron: 'Tirón vertical', dominada: 'Dominada', remo_inv: 'Remo invertido', pajaro: 'Pájaro (vuelos posteriores)', superman: 'Superman', pullover: 'Pullover', remo_menton: 'Remo al mentón', flexion: 'Flexión de brazos', press_piso: 'Press de pecho', apertura: 'Apertura de pecho', empuje: 'Empuje horizontal', fondos: 'Fondos', curl: 'Curl de bíceps', ext_tri: 'Extensión de tríceps', patada_tri: 'Patada de tríceps', pica: 'Pica (hombros)', press_vert: 'Press vertical', elev_lat: 'Elevación lateral', elev_front: 'Elevación frontal' };
+let _EST = null;
+async function estimulos() { if (!_EST) _EST = await api('GET', '/estimulos'); return _EST; }
+const GRUPOS_EST = [['patrones', 'Estímulos de patrones de movimiento básicos'], ['capacidades', 'Estímulos de capacidades físicas integradas'], ['energias', 'Estímulos del sistema energético']];
 // Foto del ejercicio: se reduce para que pese poco y cargue al instante en el celular
 function fotoEjercicio(file, maxLado = 560) {
   return new Promise((res, rej) => {
@@ -27,8 +34,26 @@ async function verPosiciones(e, eq) {
 }
 
 function tabsPlan(activa) {
-  const t = [['/planificacion', 'Semana', 'plan.semana'], ['/planificacion/formatos', 'Formatos e intervalos', 'plan.config'], ['/planificacion/agenda', 'Agenda semanal', 'plan.config'], ['/planificacion/staff', 'Agenda Staff', 'plan.staff'], ['/planificacion/rutinas', 'Rutinas', 'plan.rutinas'], ['/planificacion/biblioteca', 'Biblioteca', 'plan.biblioteca'], ['/planificacion/equipos', 'Equipamiento', 'plan.config']].filter(x => puede(x[2]));
+  const t = [['/planificacion', 'Agenda semanal', 'plan.semana'], ['/planificacion/staff', 'Agenda Staff', 'plan.staff'], ['/planificacion/formatos', 'Formatos e Intervalos', 'plan.semana'], ['/planificacion/semana', 'Planificación Semanal', 'plan.semana'], ['/planificacion/rutinas', 'Rutinas Personalizadas', 'plan.rutinas'], ['/planificacion/biblioteca', 'Biblioteca', 'plan.biblioteca'], ['/planificacion/equipos', 'Equipamiento', 'plan.config']].filter(x => puede(x[2]));
   return `<div class="tabs">${t.map(([h, n]) => `<button onclick="ir('#${h}')" class="${h === activa ? 'on' : ''}">${n}</button>`).join('')}</div>`;
+}
+// Semana elegida: es la misma en todas las pestañas del módulo
+const semanaSel = () => sessionStorage.getItem('omega_semana') || lunesDe(hoyAR());
+const semanaSet = (v) => sessionStorage.setItem('omega_semana', v);
+const ORIGEN_TXT = { propia: 'guardada para esta semana', heredada: 'heredada de la última semana guardada', general: 'configuración general (todavía no se guardó ninguna semana)' };
+// Navegador de semanas + calendario de semanas (A = agenda guardada, F = formatos guardados, C = circuitos planificados)
+async function barraSemana(desde) {
+  const lista = await api('GET', '/semanas?desde=' + sumaDias(desde, -14) + '&n=9');
+  return `<div class="row" style="margin-bottom:6px"><button class="sm" id="ant">‹ Semana anterior</button><b>${fmtF(desde)} al ${fmtF(sumaDias(desde, 6))}</b><button class="sm" id="sig">Semana siguiente ›</button><button class="sm ghost" id="esta">Esta semana</button></div>
+    <div class="tabs" style="margin-bottom:4px;overflow-x:auto;flex-wrap:nowrap">${lista.map(s => `<button data-sem="${s.semana}" class="${s.semana === desde ? 'on' : ''}" title="Agenda ${s.agenda} · Formatos ${s.formatos} · ${s.circuitos} circuitos">${fmtF(s.semana)}${s.actual ? ' •' : ''} <span class="small muted">${s.agenda === 'propia' ? 'A' : ''}${s.formatos === 'propia' ? 'F' : ''}${s.circuitos ? 'C' : ''}</span></button>`).join('')}</div>
+    <div class="small muted" style="margin-bottom:10px">Calendario de semanas · A = agenda guardada · F = formatos guardados · C = circuitos planificados · • semana actual</div>`;
+}
+function ligarBarra(main, desde, ir_) {
+  const set = (f) => { semanaSet(f); ir_(f); };
+  $('#ant', main).onclick = () => set(sumaDias(desde, -7));
+  $('#sig', main).onclick = () => set(sumaDias(desde, 7));
+  $('#esta', main).onclick = () => set(lunesDe(hoyAR()));
+  $$('[data-sem]', main).forEach(b => b.onclick = () => set(b.dataset.sem));
 }
 // Un formato está listo si define su trabajo (o marca que no usa intervalos) y su descanso (o marca que no lo usa).
 const sinTrab = (f) => !!f.sin_trabajo, sinDesc = (f) => !!f.sin_trabajo || !!f.sin_descanso;
@@ -41,24 +66,24 @@ const descTxt = (f) => sinDesc(f) ? 'Sin descanso' : (f.descanso_seg != null ? d
 const duracionFormato = (f) => !formatoListo(f) ? null : sinTrab(f) ? (f.duracion_min || 60) : Math.round(5 * (f.rondas || 3) * ((f.trabajo_seg || 0) + (sinDesc(f) ? 0 : f.descanso_seg)) / 60 * 10) / 10;
 const eqNombre = (eq, clave) => (eq.find(e => e.clave === clave) || {}).nombre || clave;
 
-// ---------- Semana ----------
-vista('/planificacion', ['admin', 'profesor'], async (main) => {
+// ---------- Planificación Semanal (la IA arma los circuitos con la agenda y los formatos de la semana) ----------
+vista('/planificacion/semana', ['admin', 'profesor'], async (main) => {
   const adm = S.user.rol === 'admin';
-  let desde = sessionStorage.getItem('omega_semana') || lunesDe(hoyAR());
+  let desde = semanaSel();
   async function cargar() {
-    sessionStorage.setItem('omega_semana', desde);
-    const [dias, formatos, md] = await Promise.all([api('GET', '/planificacion?desde=' + desde + '&dias=7'), api('GET', '/formatos'), api('GET', '/planificacion/modo')]);
+    semanaSet(desde);
+    const [dias, formatos, md, barra] = await Promise.all([api('GET', '/planificacion?desde=' + desde + '&dias=7'), api('GET', '/formatos-semana?semana=' + desde), api('GET', '/planificacion/modo'), barraSemana(desde)]);
     const manual = md.modo === 'manual';
-    const pendientes = formatos.filter(f => !formatoListo(f));
+    const pendientes = formatos.formatos.filter(f => !formatoListo(f));
     const hayCircuitos = dias.some(d => d.fecha >= hoyAR() && d.clases.some(c => c.circuito));
     main.innerHTML = `
-      <div class="page-title"><h1>${adm ? 'Planificación de clases' : 'Clases'}</h1>
+      <div class="page-title"><h1>Planificación Semanal</h1>
         <div class="actions">${puede('plan.generar') ? `<button id="gen" class="primary" ${pendientes.length ? 'disabled' : ''}>${manual ? 'Armar semana en blanco' : 'Generar semana con IA'}</button>${hayCircuitos ? '<button id="reh" class="danger">Eliminar semana</button>' : ''}` : ''}</div></div>
-      ${tabsPlan('/planificacion')}
+      ${tabsPlan('/planificacion/semana')}
       ${puede('plan.generar') ? `<div class="row" style="margin-bottom:10px"><span class="small muted">Cómo se arma la semana:</span><div class="tabs" style="margin:0"><button data-modo="ia" class="${manual ? '' : 'on'}">✨ Generar con IA</button><button data-modo="manual" class="${manual ? 'on' : ''}">✋ Manual</button></div></div>` : ''}
       ${manual ? '<div class="infobox" style="margin-bottom:10px">Modo manual: se crean los circuitos vacíos y elegís vos cada ejercicio (y su progresión) entrando a la clase → “Elegir”.</div>' : ''}
       ${pendientes.length ? `<div class="warnbox" style="margin-bottom:12px">Antes de planificar hay que cargar los intervalos de trabajo y descanso de: <b>${pendientes.map(f => esc(f.nombre)).join(', ')}</b>. ${adm ? '<a href="#/planificacion/formatos">Configurar ahora →</a>' : 'Pedile al administrador que los cargue.'}</div>` : ''}
-      <div class="row" style="margin-bottom:14px"><button class="sm" id="ant">‹ Semana anterior</button><b>${fmtF(desde)} al ${fmtF(sumaDias(desde, 6))}</b><button class="sm" id="sig">Semana siguiente ›</button><button class="sm ghost" id="esta">Esta semana</button></div>
+      ${barra}<div class="infobox" style="margin-bottom:12px">La IA planifica la semana con la <a href="#/planificacion">agenda</a> y los <a href="#/planificacion/formatos">formatos e intervalos</a> de esta semana: cada estímulo (patrones de movimiento, capacidades físicas y sistema energético) se trabaja con frecuencia 2, para un óptimo de 3 entrenamientos por semana, y cada formato respeta sus estaciones y parámetros. Los alumnos que entrenan seguido o más de 3 veces por semana quedan acompañados por el staff.</div>
       ${dias.map(d => {
         const grupos = new Map();
         for (const c of d.clases) { const k = c.formato ? c.formato.id : 0; if (!grupos.has(k)) grupos.set(k, { formato: c.formato, circuito: c.circuito, horas: [] }); grupos.get(k).horas.push(c.hora); }
@@ -68,11 +93,8 @@ vista('/planificacion', ['admin', 'profesor'], async (main) => {
             ${g.circuito ? `<div class="small" style="margin-top:6px">${g.circuito.rondas[0].ejercicios.filter(e => !e.vacio).map(e => esc(e.nombre)).join(' · ') || '<span class="t-amarillo">Sin ejercicios: entrá para elegirlos</span>'}</div>${g.circuito.advertencias.length ? `<div class="small t-amarillo" style="margin-top:4px">⚠ ${esc(g.circuito.advertencias[0])}</div>` : ''}` : '<div class="small muted" style="margin-top:6px">Sin circuito generado</div>'}</div>
             ${g.circuito ? '<span class="pill">Ver circuito ›</span>' : ''}</div>`).join('') : '<div class="muted small" style="margin-top:8px">Sin clases este día.</div>'}</div>`;
       }).join('')}`;
-    const set = (f) => { desde = f; cargar().catch(fail); };
+    ligarBarra(main, desde, (f) => { desde = f; cargar().catch(fail); });
     $$('[data-modo]', main).forEach(b => b.onclick = async () => { try { await api('PUT', '/planificacion/modo', { modo: b.dataset.modo }); cargar(); } catch (e) { fail(e); } });
-    $('#ant', main).onclick = () => set(sumaDias(desde, -7));
-    $('#sig', main).onclick = () => set(sumaDias(desde, 7));
-    $('#esta', main).onclick = () => set(lunesDe(hoyAR()));
     const bgen = $('#gen', main); if (bgen) bgen.onclick = async (e) => {
       const hoy = hoyAR(), fin = sumaDias(desde, 6);
       const futuros = dias.some(d => d.fecha >= hoy && d.clases.some(c => c.circuito));
@@ -97,33 +119,68 @@ vista('/planificacion', ['admin', 'profesor'], async (main) => {
   await cargar();
 });
 
-// ---------- Formatos e intervalos: 3 botones de configuración inicial ----------
+// ---------- Formatos e Intervalos: configuración de cada formato PARA LA SEMANA ----------
 vista('/planificacion/formatos', ['admin', 'profesor'], async (main) => {
+  const adm = puede('plan.config');
+  let filas = [];
   async function cargar() {
-    const fm = await api('GET', '/formatos');
-    const ok1 = fm.length > 0, ok2 = ok1 && fm.every(trabListo), ok3 = ok1 && fm.every(descListo);
-    main.innerHTML = `
-      <div class="page-title"><h1>Formatos e intervalos</h1></div>${tabsPlan('/planificacion/formatos')}
-      <p class="muted">Cargá estos tres datos por primera vez. Quedan guardados y, desde ese momento, todas las clases se planifican con estas definiciones. Podés volver a cambiarlos cuando quieras.</p>
-      <div class="steps">
-        <div class="step ${ok1 ? 'hecho' : ''}"><span class="nro">${ok1 ? '✓' : '1'}</span><b>Formatos de entrenamiento</b><span class="small muted">Cantidad y nombre de los formatos (${fm.length} cargados).</span><button id="p1" class="${ok1 ? '' : 'primary'}">${ok1 ? 'Editar formatos' : 'Cargar formatos'}</button></div>
-        <div class="step ${ok2 ? 'hecho' : ''}"><span class="nro">${ok2 ? '✓' : '2'}</span><b>Intervalos de trabajo</b><span class="small muted">Tiempo de trabajo de cada formato (o “no usa intervalos”).</span><button id="p2" class="${ok1 && !ok2 ? 'primary' : ''}" ${ok1 ? '' : 'disabled'}>${ok2 ? 'Editar trabajo' : 'Cargar trabajo'}</button></div>
-        <div class="step ${ok3 ? 'hecho' : ''}"><span class="nro">${ok3 ? '✓' : '3'}</span><b>Intervalos de descanso</b><span class="small muted">Tiempo de descanso de cada formato (o “no usa descanso”).</span><button id="p3" class="${ok2 && !ok3 ? 'primary' : ''}" ${ok1 ? '' : 'disabled'}>${ok3 ? 'Editar descanso' : 'Cargar descanso'}</button></div></div>
-      ${ok1 ? `<div class="card" style="margin-top:14px"><h3>Resumen</h3><div class="tablewrap"><table><thead><tr><th>Formato</th><th class="num">Rounds</th><th class="num">Trabajo</th><th class="num">Descanso</th><th class="num">Duración del circuito</th></tr></thead><tbody>
-        ${fm.map(f => `<tr style="cursor:default"><td>${chipFormato(f)}</td><td class="num">${f.rondas || 3}</td><td class="num">${trabTxt(f) ?? '<span class="t-amarillo">falta</span>'}</td><td class="num">${descTxt(f) ?? '<span class="t-amarillo">falta</span>'}</td><td class="num">${duracionFormato(f) != null ? duracionFormato(f) + ' min' : '—'}</td></tr>`).join('')}</tbody></table></div>
-        <p class="small muted" style="margin-top:10px">Cada formato con intervalos tiene 1, 2 o 3 rounds (los eliges en “Formatos de entrenamiento”) de 5 ejercicios en estaciones rotativas; los formatos marcados “sin intervalos” (como Flex) son una sola clase corrida. El ejercicio de cada estación sube de dificultad en el round 2 y el 3. La duración es el tiempo de trabajo y descanso de los 3 rounds.</p></div>` : ''}
-      ${ok1 ? `<div class="card" style="margin-top:14px"><h3>Cupo por estación e intensidad</h3><p class="small muted">El cupo se define por estación (no para todo el gimnasio): la capacidad de cada clase es cupo × estaciones. La <b>intensidad mínima</b> (Baja, Moderada o Alta, igual que en la Biblioteca) es la que pide la IA al armar cada clase. Podés cambiarla semana a semana: después andá a Semana → “Eliminar semana” para regenerar los días que faltan con la nueva intensidad.</p>
-        <div class="tablewrap"><table><thead><tr><th>Formato</th><th class="num">Personas por estación</th><th>Intensidad mínima</th></tr></thead><tbody>${fm.map(f => `<tr style="cursor:default"><td>${chipFormato(f)}</td><td class="num"><input type="number" min="1" max="30" data-cu="${f.id}" value="${f.cupo_estacion ?? ''}" placeholder="auto" style="width:90px"></td>
-        <td><select data-im="${f.id}">${['baja', 'moderada', 'alta'].map(x => `<option value="${x}" ${(f.intensidad_min || 'baja') === x ? 'selected' : ''}>${{ baja: 'Baja', moderada: 'Moderada', alta: 'Alta' }[x]}</option>`).join('')}</select></td></tr>`).join('')}</tbody></table></div>
-        <div class="row" style="margin-top:8px"><button class="primary" id="g-cupo">Guardar cupo e intensidad</button></div></div>` : ''}
-      ${ok1 && ok2 && ok3 ? '<div class="okbox" style="margin-top:12px">Configuración completa. Ya podés <a href="#/planificacion">generar la planificación de la semana</a>.</div>' : ''}`;
-    const gc = $('#g-cupo', main);
-    if (gc) gc.onclick = async () => {
-      try { await api('PUT', '/formatos', { formatos: fm.map(f => ({ id: f.id, nombre: f.nombre, color: f.color, cupo_estacion: ($(`[data-cu="${f.id}"]`, main).value || null), intensidad_min: $(`[data-im="${f.id}"]`, main).value || null })) }); toast('Guardado'); cargar(); } catch (e) { fail(e); }
+    const desde = semanaSel();
+    const [fs, est, barra] = await Promise.all([api('GET', '/formatos-semana?semana=' + desde), estimulos(), barraSemana(desde)]);
+    filas = fs.formatos.map(f => ({ ...f }));
+    pintar(desde, fs, est, barra);
+  }
+  const unidad = (f, k) => f['_u' + k] || ((f[k] || 0) >= 60 && (f[k] % 60 === 0) ? 'min' : 'seg');
+  const valor = (f, k) => f[k] == null ? '' : (unidad(f, k) === 'min' ? f[k] / 60 : f[k]);
+  function tiempo(f, i, k, off, etiqueta) {
+    if (off) return `<span class="muted small">${etiqueta}: —</span>`;
+    return `<span class="small muted">${etiqueta}</span><input type="number" min="0" step="any" data-t="${i}" data-k="${k}" value="${valor(f, k)}" placeholder="tiempo" style="width:84px" ${adm ? '' : 'disabled'}><select data-u="${i}" data-k="${k}" style="width:70px" ${adm ? '' : 'disabled'}><option value="seg" ${unidad(f, k) === 'seg' ? 'selected' : ''}>seg</option><option value="min" ${unidad(f, k) === 'min' ? 'selected' : ''}>min</option></select>`;
+  }
+  function pintar(desde, fs, est, barra) {
+    const sinT = (f) => !!f.sin_trabajo;
+    main.innerHTML = `<div class="page-title"><h1>Formatos e Intervalos</h1><div class="actions">${adm ? '<button id="nombres" class="ghost">Nombres y colores</button><button id="copiar">Copiar formatos semana anterior</button><button class="primary" id="ok">Guardar formatos de la semana</button>' : ''}</div></div>${tabsPlan('/planificacion/formatos')}
+      ${barra}
+      <div class="${fs.origen === 'propia' ? 'okbox' : 'infobox'}" style="margin-bottom:10px">Formatos ${ORIGEN_TXT[fs.origen]}${fs.origen === 'heredada' ? ' (' + fmtF(fs.desde) + ')' : ''}. Los formatos pueden cambiar de una semana a otra: guardalos para ${fmtF(desde)} al ${fmtF(sumaDias(desde, 6))}. Al guardar se rehacen los circuitos de la semana que falta dar y se actualiza la app de los clientes.</div>
+      ${fs.sin_configurar && fs.sin_configurar.length ? `<div class="warnbox" style="margin-bottom:10px">Falta cargar el trabajo y el descanso de: <b>${fs.sin_configurar.map(x => esc(x.nombre || x)).join(', ')}</b>.</div>` : ''}
+      ${filas.map((f, i) => `<div class="card" style="margin-bottom:12px"><div class="row between" style="flex-wrap:wrap;gap:8px"><div class="row">${chipFormato(f)}</div>
+        <div class="row" style="flex-wrap:wrap;gap:8px">
+          <span class="small muted">Estaciones</span><input type="number" min="1" max="12" data-e="${i}" value="${f.estaciones}" style="width:68px" ${adm ? '' : 'disabled'}>
+          <span class="small muted">Rounds</span><select data-r="${i}" style="width:70px" ${adm ? '' : 'disabled'}>${[3, 2, 1].map(n => `<option value="${n}" ${(f.rondas || 3) === n ? 'selected' : ''}>${n}</option>`).join('')}</select>
+          <span class="small muted">Personas por estación</span><input type="number" min="1" max="30" data-cu="${i}" value="${f.cupo_estacion ?? ''}" placeholder="auto" style="width:72px" ${adm ? '' : 'disabled'}>
+          <span class="small muted">Intensidad mín.</span><select data-im="${i}" style="width:110px" ${adm ? '' : 'disabled'}>${['baja', 'moderada', 'alta'].map(x => `<option value="${x}" ${(f.intensidad_min || 'baja') === x ? 'selected' : ''}>${{ baja: 'Baja', moderada: 'Moderada', alta: 'Alta' }[x]}</option>`).join('')}</select></div></div>
+        <div class="row" style="flex-wrap:wrap;gap:8px;margin:10px 0">
+          <label class="row small" style="gap:6px;margin:0"><input type="checkbox" data-st="${i}" ${sinT(f) ? 'checked' : ''} ${adm ? '' : 'disabled'}> Sin intervalos (clase corrida)</label>
+          ${sinT(f) ? `<span class="small muted">Duración</span><input type="number" min="1" max="600" data-dm="${i}" value="${f.duracion_min ?? 60}" style="width:76px" ${adm ? '' : 'disabled'}><span class="small muted">min</span>` : `${tiempo(f, i, 'trabajo_seg', false, 'Trabajo')}<label class="row small" style="gap:6px;margin:0 0 0 8px"><input type="checkbox" data-sd="${i}" ${f.sin_descanso ? 'checked' : ''} ${adm ? '' : 'disabled'}> Sin descanso</label>${tiempo(f, i, 'descanso_seg', !!f.sin_descanso, 'Descanso')}`}</div>
+        <div class="grid c3">${GRUPOS_EST.map(([g, titulo]) => `<div><div class="small" style="margin-bottom:4px"><b>${titulo}</b></div>${est[g].map(o => `<label class="row small" style="gap:6px;margin:0 0 3px;align-items:flex-start" title="${esc(o.ejemplo || '')}"><input type="checkbox" data-g="${g}" data-i="${i}" value="${o.clave}" ${(f[g] || []).includes(o.clave) ? 'checked' : ''} ${adm ? '' : 'disabled'}> <span>${esc(o.nombre)}</span></label>`).join('')}</div>`).join('')}</div>
+      </div>`).join('')}
+      <p class="small muted">Elegí 1 o varios estímulos en cada uno de los tres grupos. La IA arma los circuitos de cada clase con las estaciones y los estímulos de su formato.</p>`;
+    ligarBarra(main, desde, () => cargar().catch(fail));
+    if (!adm) return;
+    const toSeg = (f, k, v) => v === '' || v == null ? null : Math.round(Number(v) * (unidad(f, k) === 'min' ? 60 : 1));
+    $$('input[data-t]', main).forEach(inp => inp.oninput = () => { const f = filas[Number(inp.dataset.t)]; f[inp.dataset.k] = toSeg(f, inp.dataset.k, inp.value); });
+    $$('select[data-u]', main).forEach(sel => sel.onchange = () => { const f = filas[Number(sel.dataset.u)], k = sel.dataset.k, inp = $(`input[data-t="${sel.dataset.u}"][data-k="${k}"]`, main); f['_u' + k] = sel.value; f[k] = toSeg(f, k, inp.value); });
+    $$('input[data-e]', main).forEach(inp => inp.oninput = () => { filas[Number(inp.dataset.e)].estaciones = inp.value === '' ? null : Number(inp.value); });
+    $$('select[data-r]', main).forEach(s => s.onchange = () => { filas[Number(s.dataset.r)].rondas = Number(s.value); });
+    $$('input[data-cu]', main).forEach(inp => inp.oninput = () => { filas[Number(inp.dataset.cu)].cupo_estacion = inp.value === '' ? null : Number(inp.value); });
+    $$('select[data-im]', main).forEach(s => s.onchange = () => { filas[Number(s.dataset.im)].intensidad_min = s.value; });
+    $$('input[data-dm]', main).forEach(inp => inp.oninput = () => { filas[Number(inp.dataset.dm)].duracion_min = inp.value === '' ? null : Number(inp.value); });
+    $$('input[data-st]', main).forEach(ch => ch.onchange = () => { const f = filas[Number(ch.dataset.st)]; f.sin_trabajo = ch.checked ? 1 : 0; if (ch.checked) f.sin_descanso = 1; pintar(desde, fs, est, barra); });
+    $$('input[data-sd]', main).forEach(ch => ch.onchange = () => { const f = filas[Number(ch.dataset.sd)]; f.sin_descanso = ch.checked ? 1 : 0; pintar(desde, fs, est, barra); });
+    $$('input[data-g]', main).forEach(ch => ch.onchange = () => { const f = filas[Number(ch.dataset.i)], g = ch.dataset.g; const s = new Set(f[g] || []); if (ch.checked) s.add(ch.value); else s.delete(ch.value); f[g] = [...s]; });
+    $('#nombres', main).onclick = () => editarFormatos(filas, 'nombre', () => cargar().catch(fail));
+    $('#ok', main).onclick = async () => {
+      for (const f of filas) {
+        if (!f.estaciones || f.estaciones < 1) return toast('Indicá las estaciones de ' + f.nombre, 'warn');
+        if (!f.sin_trabajo && f.trabajo_seg == null) return toast('Completá el tiempo de trabajo de ' + f.nombre, 'warn');
+        if (!f.sin_trabajo && !f.sin_descanso && f.descanso_seg == null) return toast('Completá el descanso de ' + f.nombre + ' (o tildá “Sin descanso”)', 'warn');
+        for (const [g, titulo] of GRUPOS_EST) if (!(f[g] || []).length) return toast(f.nombre + ': elegí al menos uno en «' + titulo + '»', 'warn');
+      }
+      const body = filas.map(f => ({ id: f.id, estaciones: f.estaciones, rondas: f.rondas || 3, cupo_estacion: f.cupo_estacion ?? null, intensidad_min: f.intensidad_min || 'baja', sin_trabajo: f.sin_trabajo ? 1 : 0, sin_descanso: f.sin_descanso || f.sin_trabajo ? 1 : 0, trabajo_seg: f.trabajo_seg ?? null, descanso_seg: f.descanso_seg ?? null, duracion_min: f.sin_trabajo ? (f.duracion_min || 60) : (f.duracion_min ?? null), patrones: f.patrones, capacidades: f.capacidades, energias: f.energias }));
+      try { await api('PUT', '/formatos-semana', { semana: desde, formatos: body }); toast('Formatos guardados para la semana · circuitos y app de clientes actualizados'); cargar(); } catch (e) { fail(e); }
     };
-    $('#p1', main).onclick = () => editarFormatos(fm, 'nombre', cargar);
-    $('#p2', main).onclick = () => editarFormatos(fm, 'trabajo_seg', cargar);
-    $('#p3', main).onclick = () => editarFormatos(fm, 'descanso_seg', cargar);
+    $('#copiar', main).onclick = async () => {
+      if (fs.origen === 'propia' && !(await confirmar('Esta semana ya tiene formatos guardados. Se reemplazan por los de la semana anterior.', 'Copiar', true))) return;
+      try { await api('POST', '/formatos-semana/copiar', { semana: desde }); toast('Formatos e intervalos copiados de la semana anterior'); cargar(); } catch (e) { fail(e); }
+    };
   }
   await cargar();
 });
@@ -188,22 +245,33 @@ function editarFormatos(fm, modo, despues) {
   pintar();
 }
 
-// ---------- Agenda semanal (qué formato se da en cada horario) ----------
-vista('/planificacion/agenda', ['admin', 'profesor'], async (main) => {
-  const [ag, fm] = await Promise.all([api('GET', '/agenda'), api('GET', '/formatos')]);
-  const horas = Array.from({ length: 17 }, (_, i) => 7 + i); // 7:00 a 23:00, horarios corridos (se pueden dejar baches libres)
-  const cel = new Map(ag.map(a => [a.dia + '-' + a.hora, a.formato_id]));
-  const cambios = new Map();
-  const opts = (sel) => '<option value="">—</option>' + fm.map(f => `<option value="${f.id}" ${sel === f.id ? 'selected' : ''}>${esc(f.nombre)}</option>`).join('');
-  main.innerHTML = `<div class="page-title"><h1>Agenda semanal</h1><div class="actions"><button class="primary" id="ok">Guardar agenda</button></div></div>${tabsPlan('/planificacion/agenda')}
-    <p class="muted">Elegí qué formato se da en cada horario (de 7:00 a 23:00; dejá “—” en los horarios sin clase). Después generá la semana en “Semana”.</p>
-    <div class="tablewrap" style="padding:10px"><div class="agenda"><div></div>${DIAS_CORTO.slice(1).map(d => `<div class="h">${d}</div>`).join('')}
-      ${horas.map(h => `<div class="h">${hh(h)}</div>${[1, 2, 3, 4, 5, 6, 7].map(d => `<select data-d="${d}" data-h="${h}">${opts(cel.get(d + '-' + h) ?? null)}</select>`).join('')}`).join('')}</div></div>`;
-  $$('select[data-d]', main).forEach(s => s.onchange = () => cambios.set(s.dataset.d + '-' + s.dataset.h, { dia: Number(s.dataset.d), hora: Number(s.dataset.h), formato_id: s.value ? Number(s.value) : null }));
-  $('#ok', main).onclick = async () => {
-    if (!cambios.size) return toast('No hay cambios para guardar');
-    try { await api('PUT', '/agenda', { celdas: [...cambios.values()] }); cambios.clear(); toast('Agenda guardada. Generá la semana para actualizar los circuitos.'); } catch (e) { fail(e); }
-  };
+// ---------- Agenda semanal: qué formato se da en cada horario (es el primer paso de la planificación de la semana) ----------
+vista('/planificacion', ['admin', 'profesor'], async (main) => {
+  const adm = puede('plan.config');
+  async function cargar() {
+    const desde = semanaSel();
+    const [ag, fm, barra] = await Promise.all([api('GET', '/agenda-semanal?semana=' + desde), api('GET', '/formatos'), barraSemana(desde)]);
+    const horas = Array.from({ length: 17 }, (_, i) => 7 + i); // 7:00 a 23:00 (se pueden dejar baches libres)
+    const cel = new Map(ag.celdas.map(a => [a.dia + '-' + a.hora, a.formato_id]));
+    const opts = (sel) => '<option value="">—</option>' + fm.map(f => `<option value="${f.id}" ${sel === f.id ? 'selected' : ''}>${esc(f.nombre)}</option>`).join('');
+    main.innerHTML = `<div class="page-title"><h1>Agenda semanal</h1><div class="actions">${adm ? '<button id="copiar">Copiar agenda semana anterior</button><button class="primary" id="ok">Guardar agenda de la semana</button>' : ''}</div></div>${tabsPlan('/planificacion')}
+      ${barra}
+      <div class="${ag.origen === 'propia' ? 'okbox' : 'infobox'}" style="margin-bottom:10px">Agenda ${ORIGEN_TXT[ag.origen]}${ag.origen === 'heredada' ? ' (' + fmtF(ag.desde) + ')' : ''}. ${adm ? 'Es el primer paso de la planificación: cada cambio que guardes actualiza la semana, el Staff y la app de los clientes.' : 'Solo el administrador puede modificarla.'}</div>
+      <div class="tablewrap" style="padding:10px"><div class="agenda"><div></div>${DIAS_CORTO.slice(1).map((d, i) => `<div class="h">${d} ${sumaDias(desde, i).slice(8)}</div>`).join('')}
+        ${horas.map(h => `<div class="h">${hh(h)}</div>${[1, 2, 3, 4, 5, 6, 7].map(d => `<select data-d="${d}" data-h="${h}" ${adm ? '' : 'disabled'}>${opts(cel.get(d + '-' + h) ?? null)}</select>`).join('')}`).join('')}</div></div>
+      <p class="small muted" style="margin-top:10px">Siguiente paso: <a href="#/planificacion/staff">Agenda Staff</a> (elegir el profesor de cada clase) → <a href="#/planificacion/formatos">Formatos e Intervalos</a> → <a href="#/planificacion/semana">Planificación Semanal</a>.</p>`;
+    ligarBarra(main, desde, () => cargar().catch(fail));
+    if (!adm) return;
+    $('#ok', main).onclick = async () => {
+      const celdas = $$('select[data-d]', main).filter(s => s.value).map(s => ({ dia: Number(s.dataset.d), hora: Number(s.dataset.h), formato_id: Number(s.value) }));
+      try { await api('PUT', '/agenda-semanal', { semana: desde, celdas }); toast('Agenda guardada · ya impacta en el Staff y en la app de los clientes'); cargar(); } catch (e) { fail(e); }
+    };
+    $('#copiar', main).onclick = async () => {
+      if (ag.origen === 'propia' && !(await confirmar('Esta semana ya tiene una agenda guardada. Se reemplaza por la de la semana anterior.', 'Copiar', true))) return;
+      try { const r = await api('POST', '/agenda-semanal/copiar', { semana: desde }); toast(r.clases + ' clases copiadas de la semana anterior'); cargar(); } catch (e) { fail(e); }
+    };
+  }
+  await cargar();
 });
 
 // ---------- Equipamiento y capacidad ----------
@@ -233,62 +301,66 @@ vista('/planificacion/equipos', ['admin', 'profesor'], async (main) => {
   const t = $('#s-todas', main); if (t) t.onclick = async () => { try { const r = await api('POST', '/sugerencias/aceptar-todas', {}); toast(r.aceptadas + ' ejercicios agregados'); render(); } catch (e) { fail(e); } };
 });
 
-// ---------- Agenda Staff: qué profesor tiene cada clase ----------
+// ---------- Agenda Staff: qué profesor tiene cada clase de la semana (después de actualizar la agenda semanal) ----------
 vista('/planificacion/staff', ['admin', 'profesor'], async (main) => {
   const adm = puede('plan.staff_editar');
-  let desde = sessionStorage.getItem('omega_staff') || lunesDe(hoyAR());
   async function cargar() {
-    sessionStorage.setItem('omega_staff', desde);
-    const [ag, mis] = await Promise.all([api('GET', '/staff/agenda?desde=' + desde), adm ? Promise.resolve(null) : api('GET', '/staff/mis-turnos')]);
+    const desde = semanaSel();
+    const [ag, mis, as, barra] = await Promise.all([api('GET', '/staff/agenda?desde=' + desde), adm ? Promise.resolve(null) : api('GET', '/staff/mis-turnos'), api('GET', '/agenda-semanal?semana=' + desde), barraSemana(desde)]);
     const horas = [...new Set(ag.dias.flatMap(d => d.clases.map(c => c.hora)))].sort((a, b) => a - b);
     const opts = (sel) => '<option value="">Sin asignar</option>' + ag.profesores.map(p => `<option value="${p.id}" ${sel === p.id ? 'selected' : ''}>${esc(p.nombre)}</option>`).join('');
     const yo = S.user.id;
-    main.innerHTML = `<div class="page-title"><h1>Agenda Staff</h1></div>${tabsPlan('/planificacion/staff')}
+    main.innerHTML = `<div class="page-title"><h1>Agenda Staff</h1><div class="actions">${adm ? '<button id="copiar">Copiar staff semana anterior</button>' : ''}</div></div>${tabsPlan('/planificacion/staff')}
       ${mis ? `<div class="card" style="margin-bottom:14px"><h3>Mis turnos</h3>${mis.turnos.length ? mis.turnos.slice(0, 10).map(t => `<div class="list-item" ${t.circuito_id ? `style="cursor:pointer" onclick="ir('#/planificacion/circuito/${t.circuito_id}')"` : ''}><b>${fmtFlargo(t.fecha)}</b><span>${hh(t.hora)}</span>${chipFormato({ nombre: t.formato, color: t.color })}</div>`).join('') : '<div class="muted">Todavía no tenés turnos asignados en las próximas dos semanas.</div>'}</div>` : ''}
-      <div class="row" style="margin-bottom:12px"><button class="sm" id="ant">‹ Semana anterior</button><b>${fmtF(desde)} al ${fmtF(sumaDias(desde, 6))}</b><button class="sm" id="sig">Semana siguiente ›</button><button class="sm ghost" id="esta">Esta semana</button></div>
-      <p class="small muted">${adm ? 'Elegí qué profesor da cada clase. El cambio vale para esta semana; con “Fijar todas las semanas” queda como turno habitual.' : 'Tus clases aparecen resaltadas.'}</p>
+      ${barra}
+      ${as.origen !== 'propia' ? `<div class="warnbox" style="margin-bottom:10px">Primero actualizá la <a href="#/planificacion">Agenda semanal</a> de esta semana (hoy usa la agenda ${ORIGEN_TXT[as.origen]}). Después elegí el profesor de cada clase.</div>` : ''}
+      <p class="small muted">${adm ? 'Elegí qué profesor da cada clase de esta semana, o copiá el staff de la semana anterior. Cada cambio se refleja en la app de los clientes.' : 'Tus clases aparecen resaltadas.'}</p>
       <div class="tablewrap"><table class="staff"><thead><tr><th>Horario</th>${ag.dias.map(d => `<th class="nosort">${DIAS_CORTO[d.dia]} ${d.fecha.slice(8)}${d.fecha === hoyAR() ? ' •' : ''}</th>`).join('')}</tr></thead><tbody>
       ${horas.map(h => `<tr style="cursor:default"><td><b>${hh(h)}</b></td>${ag.dias.map(d => { const c = d.clases.find(x => x.hora === h); if (!c) return '<td class="muted">—</td>'; const mio = c.profesor && c.profesor.id === yo;
-        return `<td class="${mio ? 'mio' : ''}"><div>${chipFormato(c.formato)}</div>${adm ? `<select data-f="${d.fecha}" data-h="${h}" style="margin-top:4px">${opts(c.profesor ? c.profesor.id : null)}</select>` : `<div class="small" style="margin-top:4px">${c.profesor ? esc(c.profesor.nombre) : '<span class="muted">Sin asignar</span>'}</div>`}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>
-      ${adm ? '<div class="row" style="margin-top:12px"><label class="row" style="color:var(--txt)"><input type="checkbox" id="fijar"> Fijar todas las semanas (turno habitual)</label></div>' : ''}`;
-    const set = (f) => { desde = f; cargar().catch(fail); };
-    $('#ant', main).onclick = () => set(sumaDias(desde, -7)); $('#sig', main).onclick = () => set(sumaDias(desde, 7)); $('#esta', main).onclick = () => set(lunesDe(hoyAR()));
+        return `<td class="${mio ? 'mio' : ''}"><div>${chipFormato(c.formato)}</div>${adm ? `<select data-f="${d.fecha}" data-h="${h}" style="margin-top:4px">${opts(c.profesor ? c.profesor.id : null)}</select>` : `<div class="small" style="margin-top:4px">${c.profesor ? esc(c.profesor.nombre) : '<span class="muted">Sin asignar</span>'}</div>`}</td>`; }).join('')}</tr>`).join('') || `<tr><td colspan="8" class="empty">No hay clases en la agenda de esta semana.</td></tr>`}</tbody></table></div>`;
+    ligarBarra(main, desde, () => cargar().catch(fail));
     $$('select[data-f]', main).forEach(sel => sel.onchange = async () => {
-      try {
-        const pid = sel.value ? Number(sel.value) : null;
-        if ($('#fijar', main).checked) await api('PUT', '/staff/agenda', { celdas: [{ dia: dowDe(sel.dataset.f), hora: Number(sel.dataset.h), profesor_id: pid }] });
-        await api('PUT', '/staff/sesion', { fecha: sel.dataset.f, hora: Number(sel.dataset.h), profesor_id: pid });
-        toast('Guardado'); cargar();
-      } catch (e) { fail(e); }
+      try { await api('PUT', '/staff/sesion', { fecha: sel.dataset.f, hora: Number(sel.dataset.h), profesor_id: sel.value ? Number(sel.value) : null }); toast('Guardado'); cargar(); } catch (e) { fail(e); }
     });
+    const bc = $('#copiar', main); if (bc) bc.onclick = async () => {
+      try { const r = await api('POST', '/staff/copiar', { semana: desde }); toast(r.asignados + ' clases con el profesor de la semana anterior'); cargar(); } catch (e) { fail(e); }
+    };
   }
   await cargar();
 });
 
-// ---------- Biblioteca de ejercicios (50 por zona) con ilustraciones, videos y alta/edición ----------
+// ---------- Biblioteca de ejercicios agrupada por estímulo (patrones, capacidades físicas, sistema energético) ----------
 vista('/planificacion/biblioteca', ['admin', 'profesor'], async (main) => {
   const adm = puede('plan.biblioteca_editar');
-  const [lista, eq] = await Promise.all([api('GET', '/ejercicios'), api('GET', '/equipamiento')]);
-  let zona = sessionStorage.getItem('omega_zona') || ZONAS_UI[0];
-  if (!ZONAS_UI.includes(zona)) zona = ZONAS_UI[0];
-  let buscar = '';
+  const [lista, eq, est] = await Promise.all([api('GET', '/ejercicios'), api('GET', '/equipamiento'), estimulos()]);
+  let grupo = sessionStorage.getItem('omega_bgrupo') || 'patrones', clave = sessionStorage.getItem('omega_bclave') || '', buscar = '';
+  const cl = (e, k) => String(e[k] || '').split(',').filter(Boolean);
+  const subitems = (g) => est[g].map(o => ({ ...o, n: lista.filter(e => (g === 'patrones' ? e.zona === o.nombre : cl(e, g === 'capacidades' ? 'capacidad' : 'energia').includes(o.clave))).length }));
+  const nombreDe = (g, k) => (est[g].find(o => o.clave === k) || {}).nombre || k;
   function pintar() {
-    sessionStorage.setItem('omega_zona', zona);
-    const z = lista.filter(e => e.zona === zona && (!buscar || norm(e.nombre + ' ' + e.prog2 + ' ' + e.prog3).includes(norm(buscar))));
+    if (!est[grupo].some(o => o.clave === clave)) clave = est[grupo][0].clave;
+    sessionStorage.setItem('omega_bgrupo', grupo); sessionStorage.setItem('omega_bclave', clave);
+    const sel = est[grupo].find(o => o.clave === clave);
+    const z = lista.filter(e => (grupo === 'patrones' ? e.zona === sel.nombre : cl(e, grupo === 'capacidades' ? 'capacidad' : 'energia').includes(clave)) && (!buscar || norm(e.nombre + ' ' + e.prog2 + ' ' + e.prog3).includes(norm(buscar))));
     main.innerHTML = `<div class="page-title"><h1>Biblioteca de ejercicios</h1><div class="actions">${adm ? '<button class="primary" id="nuevo">＋ Nuevo ejercicio</button>' : ''}</div></div>${tabsPlan('/planificacion/biblioteca')}
-      <p class="muted">Cada ejercicio tiene su dos progresiones (cada formato usa 3, 2 o 1 niveles según sus rounds), tres imágenes (inicial, media y final) y puede llevar un video grabado por los profesores.</p>
-      <div class="tabs">${ZONAS_UI.map(n => `<button data-z="${esc(n)}" class="${n === zona ? 'on' : ''}">${esc(n)} <span class="pill">${lista.filter(e => e.zona === n).length}</span></button>`).join('')}</div>
-      <div class="row" style="margin-bottom:10px"><input id="q" type="search" placeholder="Buscar en ${esc(zona)}…" value="${esc(buscar)}" style="max-width:320px"><span class="small muted">${z.length} ejercicios</span></div>
-      <div class="tablewrap hbar" tabindex="0"><table style="min-width:900px"><thead><tr><th>Base</th><th>Progresión 1</th><th>Progresión 2</th><th>Equipo</th><th>Intensidad</th><th>Posiciones</th><th>Video</th><th></th></tr></thead><tbody>
-      ${z.map(e => `<tr style="cursor:default"><td><b>${esc(e.nombre)}</b>${e.origen === 'propio' ? ' <span class="pill">propio</span>' : e.origen === 'sugerido' ? ' <span class="pill">IA</span>' : ''}</td><td>${esc(e.prog2)}</td><td>${esc(e.prog3)}</td><td>${esc(eqNombre(eq, e.equipo))}</td><td>${e.intensidad ? `<span class="pill ${e.intensidad === 'alta' ? 'rojo' : e.intensidad === 'moderada' ? 'amarillo' : ''}">${{ baja: 'Baja', moderada: 'Moderada', alta: 'Alta' }[e.intensidad]}</span>` : '—'}</td>
+      <p class="muted">Todos los ejercicios están agrupados por estímulo. Cada ejercicio pertenece a un patrón de movimiento y puede sumar varias capacidades físicas y sistemas energéticos. Tiene dos progresiones, tres imágenes (inicial, media y final) y puede llevar un video.</p>
+      <div class="tabs">${GRUPOS_EST.map(([g, t]) => `<button data-g="${g}" class="${g === grupo ? 'on' : ''}">${t.replace('Estímulos de ', '').replace('Estímulos del ', '')}</button>`).join('')}</div>
+      <div class="tabs">${subitems(grupo).map(o => `<button data-z="${o.clave}" class="${o.clave === clave ? 'on' : ''}">${esc(o.nombre)} <span class="pill">${o.n}</span></button>`).join('')}</div>
+      ${sel.ejemplo ? `<div class="infobox" style="margin-bottom:10px"><b>${esc(sel.nombre)}:</b> ${esc(sel.ejemplo)}</div>` : ''}
+      <div class="row" style="margin-bottom:10px"><input id="q" type="search" placeholder="Buscar en ${esc(sel.nombre)}…" value="${esc(buscar)}" style="max-width:320px"><span class="small muted">${z.length} ejercicios</span></div>
+      <div class="tablewrap hbar" tabindex="0"><table style="min-width:980px"><thead><tr><th>Base</th><th>Progresión 1</th><th>Progresión 2</th><th>Patrón</th><th>Capacidades · energía</th><th>Equipo</th><th>Intensidad</th><th>Posiciones</th><th>Video</th><th></th></tr></thead><tbody>
+      ${z.map(e => `<tr style="cursor:default"><td><b>${esc(e.nombre)}</b>${e.origen === 'propio' ? ' <span class="pill">propio</span>' : e.origen === 'sugerido' ? ' <span class="pill">IA</span>' : ''}</td><td>${esc(e.prog2)}</td><td>${esc(e.prog3)}</td><td class="small">${esc(e.zona)}</td>
+        <td class="small">${cl(e, 'capacidad').map(k => esc(nombreDe('capacidades', k))).join(', ') || '—'}<br><span class="muted">${cl(e, 'energia').map(k => esc(nombreDe('energias', k))).join(', ') || '—'}</span></td>
+        <td>${esc(eqNombre(eq, e.equipo))}</td><td>${e.intensidad ? `<span class="pill ${e.intensidad === 'alta' ? 'rojo' : e.intensidad === 'moderada' ? 'amarillo' : ''}">${{ baja: 'Baja', moderada: 'Moderada', alta: 'Alta' }[e.intensidad]}</span>` : '—'}</td>
         <td><button class="sm" data-pos="${e.id}">▣ Ver 3 posiciones</button></td>
         <td>${e.video ? `<button class="sm" data-ver="${e.id}">▶ Ver</button>` : '<span class="vid-no">Sin video</span>'}</td>
         <td class="right" style="white-space:nowrap">${adm ? `<label class="btn sm" style="margin:0">${e.video ? 'Cambiar video' : 'Subir video'}<input type="file" accept="video/*" class="hidden" data-vid="${e.id}"></label>` : ''}
-        ${adm ? `<button class="sm" data-ed="${e.id}">✏️ Editar</button> <button class="danger sm" data-el="${e.id}">✕</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">No hay ejercicios con ese filtro.</td></tr>'}</tbody></table></div>`;
-    $$('[data-z]', main).forEach(b => b.onclick = () => { zona = b.dataset.z; buscar = ''; pintar(); });
+        ${adm ? `<button class="sm" data-ed="${e.id}">✏️ Editar</button> <button class="danger sm" data-el="${e.id}">✕</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="10" class="empty">No hay ejercicios con ese filtro.</td></tr>'}</tbody></table></div>`;
+    $$('[data-g]', main).forEach(b => b.onclick = () => { grupo = b.dataset.g; clave = ''; buscar = ''; pintar(); });
+    $$('[data-z]', main).forEach(b => b.onclick = () => { clave = b.dataset.z; buscar = ''; pintar(); });
     const q = $('#q', main); q.oninput = debounce(() => { buscar = q.value; pintar(); const n = $('#q', main); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 250);
-    const bnuevo = $('#nuevo', main); if (bnuevo) bnuevo.onclick = () => formEjercicio(null, eq, zona, recargar);
-    $$('[data-ed]', main).forEach(b => b.onclick = () => formEjercicio(lista.find(e => e.id === Number(b.dataset.ed)), eq, zona, recargar));
+    const bnuevo = $('#nuevo', main); if (bnuevo) bnuevo.onclick = () => formEjercicio(null, eq, grupo === 'patrones' ? sel.nombre : ZONAS_UI[0], recargar);
+    $$('[data-ed]', main).forEach(b => b.onclick = () => formEjercicio(lista.find(e => e.id === Number(b.dataset.ed)), eq, null, recargar));
     $$('[data-pos]', main).forEach(b => b.onclick = () => verPosiciones(lista.find(e => e.id === Number(b.dataset.pos)), eq));
     $$('[data-ver]', main).forEach(b => b.onclick = () => verVideo(lista.find(e => e.id === Number(b.dataset.ver)), recargar));
     $$('[data-vid]', main).forEach(i => i.onchange = () => subirConProgreso(Number(i.dataset.vid), i.files[0], recargar));
@@ -317,24 +389,24 @@ function verVideo(e, despues) {
   $('#qv', m).onclick = async () => { if (!(await confirmar('¿Quitar el video de este ejercicio?', 'Quitar', true))) return; try { await api('DELETE', '/ejercicios/' + e.id + '/video'); m.close(); toast('Video quitado'); if (despues) despues(); } catch (er) { fail(er); } };
 }
 async function formEjercicio(e0, eq, zona, despues) {
-  let e = e0;
+  let e = e0; await estimulos();
   if (e0 && (e0.foto1 || e0.foto2 || e0.foto3)) { try { e = await api('GET', '/ejercicios/' + e0.id); } catch (_) {} }
   const fotos = [e ? e.img1 || null : null, e ? e.img2 || null : null, e ? e.img3 || null : null];
   const tocadas = [false, false, false];
   const m = modal(e ? 'Editar ejercicio' : 'Nuevo ejercicio', `<form id="f" class="stack">
-    <div class="fgrid">${campo('Zona', `<select name="zona" ${e ? 'disabled' : ''}>${ZONAS_UI.map(z => `<option ${z === (e ? e.zona : zona) ? 'selected' : ''}>${z}</option>`).join('')}</select>`)}
+    <div class="fgrid">${campo('Patrón de movimiento', `<select name="zona">${ZONAS_UI.map(z => `<option ${z === (e ? e.zona : zona) ? 'selected' : ''}>${z}</option>`).join('')}</select>`)}
     ${campo('Equipamiento que usa', `<select name="equipo">${eq.map(x => `<option value="${x.clave}" ${x.clave === (e ? e.equipo : 'ninguno') ? 'selected' : ''}>${esc(x.nombre)}</option>`).join('')}</select>`)}</div>
     ${campo('Ejercicio (round 1)', `<input name="nombre" required value="${esc(e ? e.nombre : '')}">`)}
     <div class="fgrid">${campo('Progresión del round 2', `<input name="prog2" required value="${esc(e ? e.prog2 : '')}" placeholder="Misma idea, más difícil">`)}
     ${campo('Progresión del round 3', `<input name="prog3" required value="${esc(e ? e.prog3 : '')}" placeholder="Todavía más difícil">`)}</div>
     <div class="fgrid">${campo('Tipo de movimiento (se filtra según zona y equipo)', `<select name="patron"></select>`)}
     ${campo('Intensidad cardiovascular', `<select name="intensidad">${['baja', 'moderada', 'alta'].map(x => `<option value="${x}" ${x === ((e && e.intensidad) || 'baja') ? 'selected' : ''}>${{ baja: 'Baja', moderada: 'Moderada', alta: 'Alta (sube las pulsaciones)' }[x]}</option>`).join('')}</select>`)}</div>
+    <div class="grid c2"><div><div class="small"><b>Capacidades físicas integradas</b></div>${_EST.capacidades.map(o => `<label class="row small" style="gap:6px;margin:0 0 3px" title="${esc(o.ejemplo || '')}"><input type="checkbox" name="cap" value="${o.clave}" ${String(e ? e.capacidad : 'fuerza').split(',').includes(o.clave) ? 'checked' : ''}> ${esc(o.nombre)}</label>`).join('')}</div><div><div class="small"><b>Sistema energético</b></div>${_EST.energias.map(o => `<label class="row small" style="gap:6px;margin:0 0 3px" title="${esc(o.ejemplo || '')}"><input type="checkbox" name="ene" value="${o.clave}" ${String(e ? e.energia : 'aerobico').split(',').includes(o.clave) ? 'checked' : ''}> ${esc(o.nombre)}</label>`).join('')}</div></div>
     <div><label class="small muted">${e ? 'Imágenes: se mantienen las actuales. Podés reemplazarlas por tus propias fotos.' : 'Subí tres fotos ya editadas desde el celular: posición inicial, media y final.'}</label><div id="pos"></div></div>
     <div class="row" style="justify-content:flex-end"><button type="button" data-close>Cancelar</button><button class="primary">${e ? 'Guardar' : 'Agregar ejercicio'}</button></div></form>`, { wide: true });
   const f = $('#f', m);
   // Filtros encadenados: los tipos de movimiento válidos salen de lo que ya existe en la biblioteca para esa zona y ese equipo
   let todos = []; try { todos = await api('GET', '/ejercicios'); } catch (_) {}
-  const ZONA_PATRON = { 'Resistencia aeróbica': 'sprint', Piernas: 'sentadilla', 'Glúteos': 'puente', Core: 'abdominal', Espalda: 'remo_inc', Pecho: 'flexion', Hombros: 'press_vert', 'Bíceps': 'curl', 'Tríceps': 'ext_tri' };
   function patronesValidos() {
     const z = f.zona.value, q = f.equipo.value;
     const deZona = new Set(todos.filter(x => x.zona === z && x.patron).map(x => x.patron));
@@ -368,7 +440,8 @@ async function formEjercicio(e0, eq, zona, despues) {
   f.onsubmit = async (ev) => {
     ev.preventDefault(); const fd = Object.fromEntries(new FormData(f));
     const body = { nombre: fd.nombre, prog2: fd.prog2, prog3: fd.prog3, equipo: fd.equipo, patron: fd.patron, intensidad: fd.intensidad };
-    if (!e) body.zona = f.zona.value;
+    body.zona = f.zona.value; body.capacidades = $$('input[name=cap]:checked', f).map(x => x.value); body.energias = $$('input[name=ene]:checked', f).map(x => x.value);
+    if (!body.capacidades.length || !body.energias.length) return toast('Elegí al menos una capacidad física y un sistema energético', 'warn');
     ['img1', 'img2', 'img3'].forEach((k, i) => { if (!e || tocadas[i]) body[k] = fotos[i] || null; });
     try { if (e) await api('PUT', '/ejercicios/' + e.id, body); else await api('POST', '/ejercicios', body); m.close(); toast('Guardado'); despues(); } catch (er) { fail(er); }
   };
@@ -417,7 +490,7 @@ async function reemplazar(c, slot, eq) {
     $('#cont', m).innerHTML = '<div class="empty"><span class="spinner"></span></div>';
     try {
       const s = await api('GET', '/planificacion/circuito/' + c.id + '/sugerencias?slot=' + slot + '&zona=' + encodeURIComponent(zona));
-      $('#cont', m).innerHTML = `<div class="field"><label>Parte del cuerpo a trabajar</label><select id="zona">${ZONAS_UI.map(z => `<option ${z === zona ? 'selected' : ''}>${z}</option>`).join('')}</select></div>
+      $('#cont', m).innerHTML = `<div class="field"><label>Patrón de movimiento a trabajar</label><select id="zona">${ZONAS_UI.map(z => `<option ${z === zona ? 'selected' : ''}>${z}</option>`).join('')}</select></div>
         <p class="small muted">Alternativas ordenadas: primero las que alcanzan con el equipamiento y hace más tiempo no se usan.</p>
         ${s.length ? s.map(e => `<div class="list-item" data-e="${e.id}" style="cursor:pointer"><div class="grow"><b>${esc(e.nombre)}</b><div class="small muted">${esc(e.prog2)} → ${esc(e.prog3)}</div><div class="small" style="margin-top:3px">${esc(eqNombre(eq, e.equipo))}${e.tiene_video ? ' · <span class="vid-ok">con video</span>' : ''}${e.dias_desde_uso == null ? ' · sin usos recientes' : ' · usado hace ' + e.dias_desde_uso + ' días'}</div></div>${e.alcanza_equipo ? '<span class="pill verde">alcanza</span>' : '<span class="pill rojo">no alcanza el equipo</span>'}</div>`).join('') : '<div class="empty">No hay otros ejercicios en esta zona.</div>'}`;
       $('#zona', m).onchange = (ev) => { zona = ev.target.value; pintar(); };
@@ -511,3 +584,4 @@ function cronometro(c) {
   addTimer(iv);
   pintar();
 }
+
