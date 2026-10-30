@@ -21,7 +21,7 @@ async function verPosiciones(e, eq) {
   if (e.id && (e.foto1 || e.foto2 || e.foto3 || e.fotos)) { try { full = await api('GET', '/ejercicios/' + e.id); } catch (_) {} }
   const nom = eq ? eqNombre(eq, full.equipo) : '';
   const m = modal(full.nombre, `<p class="small muted">${esc(full.zona || '')}${nom && full.equipo !== 'ninguno' ? ' · ' + esc(nom) : ''}</p>${Ilustra.tira(full.patron || 'sentadilla', full.equipo, [full.img1, full.img2, full.img3], nom)}
-    ${full.prog2 ? `<div class="small" style="margin-top:8px"><b>Round 2:</b> ${esc(full.prog2)}<br><b>Round 3:</b> ${esc(full.prog3)}</div>` : ''}
+    ${full.prog2 ? `<div class="small" style="margin-top:8px"><b>Progresión 1:</b> ${esc(full.prog2)}<br><b>Progresión 2:</b> ${esc(full.prog3)}</div>` : ''}
     <div class="row" style="justify-content:flex-end;margin-top:10px"><button data-close>Cerrar</button></div>`, { wide: true });
   return m;
 }
@@ -38,7 +38,7 @@ const formatoListo = (f) => trabListo(f) && descListo(f);
 const durTxt = (n) => { n = Number(n) || 0; return n >= 60 ? Math.floor(n / 60) + ' min' + (n % 60 ? ' ' + (n % 60) + ' s' : '') : n + ' s'; };
 const trabTxt = (f) => sinTrab(f) ? 'Sin intervalos' : (f.trabajo_seg != null ? durTxt(f.trabajo_seg) : null);
 const descTxt = (f) => sinDesc(f) ? 'Sin descanso' : (f.descanso_seg != null ? durTxt(f.descanso_seg) : null);
-const duracionFormato = (f) => !formatoListo(f) ? null : sinTrab(f) ? (f.duracion_min || 60) : Math.round(15 * ((f.trabajo_seg || 0) + (sinDesc(f) ? 0 : f.descanso_seg)) / 60 * 10) / 10;
+const duracionFormato = (f) => !formatoListo(f) ? null : sinTrab(f) ? (f.duracion_min || 60) : Math.round(5 * (f.rondas || 3) * ((f.trabajo_seg || 0) + (sinDesc(f) ? 0 : f.descanso_seg)) / 60 * 10) / 10;
 const eqNombre = (eq, clave) => (eq.find(e => e.clave === clave) || {}).nombre || clave;
 
 // ---------- Semana ----------
@@ -109,9 +109,9 @@ vista('/planificacion/formatos', ['admin', 'profesor'], async (main) => {
         <div class="step ${ok1 ? 'hecho' : ''}"><span class="nro">${ok1 ? '✓' : '1'}</span><b>Formatos de entrenamiento</b><span class="small muted">Cantidad y nombre de los formatos (${fm.length} cargados).</span><button id="p1" class="${ok1 ? '' : 'primary'}">${ok1 ? 'Editar formatos' : 'Cargar formatos'}</button></div>
         <div class="step ${ok2 ? 'hecho' : ''}"><span class="nro">${ok2 ? '✓' : '2'}</span><b>Intervalos de trabajo</b><span class="small muted">Tiempo de trabajo de cada formato (o “no usa intervalos”).</span><button id="p2" class="${ok1 && !ok2 ? 'primary' : ''}" ${ok1 ? '' : 'disabled'}>${ok2 ? 'Editar trabajo' : 'Cargar trabajo'}</button></div>
         <div class="step ${ok3 ? 'hecho' : ''}"><span class="nro">${ok3 ? '✓' : '3'}</span><b>Intervalos de descanso</b><span class="small muted">Tiempo de descanso de cada formato (o “no usa descanso”).</span><button id="p3" class="${ok2 && !ok3 ? 'primary' : ''}" ${ok1 ? '' : 'disabled'}>${ok3 ? 'Editar descanso' : 'Cargar descanso'}</button></div></div>
-      ${ok1 ? `<div class="card" style="margin-top:14px"><h3>Resumen</h3><div class="tablewrap"><table><thead><tr><th>Formato</th><th class="num">Trabajo</th><th class="num">Descanso</th><th class="num">Duración del circuito</th></tr></thead><tbody>
-        ${fm.map(f => `<tr style="cursor:default"><td>${chipFormato(f)}</td><td class="num">${trabTxt(f) ?? '<span class="t-amarillo">falta</span>'}</td><td class="num">${descTxt(f) ?? '<span class="t-amarillo">falta</span>'}</td><td class="num">${duracionFormato(f) != null ? duracionFormato(f) + ' min' : '—'}</td></tr>`).join('')}</tbody></table></div>
-        <p class="small muted" style="margin-top:10px">Cada formato con intervalos tiene 3 rounds de 5 ejercicios en estaciones rotativas; los formatos marcados “sin intervalos” (como Flex) son una sola clase corrida. El ejercicio de cada estación sube de dificultad en el round 2 y el 3. La duración es el tiempo de trabajo y descanso de los 3 rounds.</p></div>` : ''}
+      ${ok1 ? `<div class="card" style="margin-top:14px"><h3>Resumen</h3><div class="tablewrap"><table><thead><tr><th>Formato</th><th class="num">Rounds</th><th class="num">Trabajo</th><th class="num">Descanso</th><th class="num">Duración del circuito</th></tr></thead><tbody>
+        ${fm.map(f => `<tr style="cursor:default"><td>${chipFormato(f)}</td><td class="num">${f.rondas || 3}</td><td class="num">${trabTxt(f) ?? '<span class="t-amarillo">falta</span>'}</td><td class="num">${descTxt(f) ?? '<span class="t-amarillo">falta</span>'}</td><td class="num">${duracionFormato(f) != null ? duracionFormato(f) + ' min' : '—'}</td></tr>`).join('')}</tbody></table></div>
+        <p class="small muted" style="margin-top:10px">Cada formato con intervalos tiene 1, 2 o 3 rounds (los eliges en “Formatos de entrenamiento”) de 5 ejercicios en estaciones rotativas; los formatos marcados “sin intervalos” (como Flex) son una sola clase corrida. El ejercicio de cada estación sube de dificultad en el round 2 y el 3. La duración es el tiempo de trabajo y descanso de los 3 rounds.</p></div>` : ''}
       ${ok1 ? `<div class="card" style="margin-top:14px"><h3>Cupo por estación e intensidad</h3><p class="small muted">El cupo se define por estación (no para todo el gimnasio): la capacidad de cada clase es cupo × estaciones. La <b>intensidad mínima</b> (Baja, Moderada o Alta, igual que en la Biblioteca) es la que pide la IA al armar cada clase. Podés cambiarla semana a semana: después andá a Semana → “Eliminar semana” para regenerar los días que faltan con la nueva intensidad.</p>
         <div class="tablewrap"><table><thead><tr><th>Formato</th><th class="num">Personas por estación</th><th>Intensidad mínima</th></tr></thead><tbody>${fm.map(f => `<tr style="cursor:default"><td>${chipFormato(f)}</td><td class="num"><input type="number" min="1" max="30" data-cu="${f.id}" value="${f.cupo_estacion ?? ''}" placeholder="auto" style="width:90px"></td>
         <td><select data-im="${f.id}">${['baja', 'moderada', 'alta'].map(x => `<option value="${x}" ${(f.intensidad_min || 'baja') === x ? 'selected' : ''}>${{ baja: 'Baja', moderada: 'Moderada', alta: 'Alta' }[x]}</option>`).join('')}</select></td></tr>`).join('')}</tbody></table></div>
@@ -135,17 +135,18 @@ function editarFormatos(fm, modo, despues) {
   const m = modal(titulo, '<div id="lista"></div><div id="acc"></div>', { wide: modo === 'nombre' });
   const pintar = () => {
     if (modo === 'nombre') {
-      $('#lista', m).innerHTML = (filas.length ? '' : '<p class="muted">Todavía no hay formatos. Agregá el primero.</p>') + filas.map((f, i) => `<div class="row" style="margin-bottom:8px;flex-wrap:nowrap">
-        <input type="color" data-i="${i}" data-k="color" value="${esc(f.color || colores[i % colores.length])}" style="width:48px;padding:3px;flex:0 0 48px"><input data-i="${i}" data-k="nombre" value="${esc(f.nombre)}" placeholder="Nombre del formato" class="grow"><button class="danger sm" data-q="${i}">Quitar</button></div>`).join('') + '<button id="add" class="ghost">+ Agregar formato</button>';
+      $('#lista', m).innerHTML = '<p class="small muted" style="margin-bottom:10px">Elegí cuántos <b>rounds</b> tiene cada formato. Cada ejercicio tiene 3 niveles (base y 2 progresiones): con 3 rounds se hacen los tres; con 2 rounds se usan las 2 progresiones más exigentes; con 1 round, la más exigente.</p>' + (filas.length ? '' : '<p class="muted">Todavía no hay formatos. Agregá el primero.</p>') + filas.map((f, i) => `<div class="row" style="margin-bottom:8px;flex-wrap:nowrap">
+        <input type="color" data-i="${i}" data-k="color" value="${esc(f.color || colores[i % colores.length])}" style="width:48px;padding:3px;flex:0 0 48px"><input data-i="${i}" data-k="nombre" value="${esc(f.nombre)}" placeholder="Nombre del formato" class="grow"><select data-i="${i}" data-rd title="Cantidad de rounds del formato" style="width:176px;flex:0 0 176px">${[3, 2, 1].map(n => `<option value="${n}" ${(f.rondas || 3) === n ? 'selected' : ''}>${n} round${n > 1 ? 's' : ''}${n === 3 ? ' · base y 2 progres.' : n === 2 ? ' · 2 más exigentes' : ' · la más exigente'}</option>`).join('')}</select><button class="danger sm" data-q="${i}">Quitar</button></div>`).join('') + '<button id="add" class="ghost">+ Agregar formato</button>';
       $('#acc', m).innerHTML = '<div class="row sticky-act" style="justify-content:flex-end"><button data-close>Cancelar</button><button class="primary" id="ok">Guardar</button></div>';
       $$('input[data-k]', m).forEach(inp => inp.oninput = () => { filas[Number(inp.dataset.i)][inp.dataset.k] = inp.value; });
+      $$('select[data-rd]', m).forEach(sel => sel.onchange = () => { filas[Number(sel.dataset.i)].rondas = Number(sel.value); });
       $$('[data-q]', m).forEach(b => b.onclick = async () => {
         const f = filas[Number(b.dataset.q)];
         if (f.id && !(await confirmar('¿Quitar el formato ' + f.nombre + '? Se saca de la agenda semanal.', 'Quitar', true))) return;
         if (f.id) { try { await api('DELETE', '/formatos/' + f.id); } catch (e) { return fail(e); } }
         filas.splice(Number(b.dataset.q), 1); pintar();
       });
-      $('#add', m).onclick = () => { filas.push({ nombre: '', color: colores[filas.length % colores.length] }); pintar(); };
+      $('#add', m).onclick = () => { filas.push({ nombre: '', color: colores[filas.length % colores.length], rondas: 3 }); pintar(); };
     } else {
       const esT = modo === 'trabajo_seg', fl = esT ? 'sin_trabajo' : 'sin_descanso';
       // Tiempo libre: se escribe el número y se elige segundos o minutos (sin tope máximo)
@@ -171,7 +172,7 @@ function editarFormatos(fm, modo, despues) {
         let body;
         if (modo === 'nombre') {
           if (filas.some(f => !String(f.nombre || '').trim())) return toast('Completá el nombre de todos los formatos', 'warn');
-          body = filas.map(f => ({ id: f.id, nombre: f.nombre, color: f.color }));
+          body = filas.map(f => ({ id: f.id, nombre: f.nombre, color: f.color, rondas: f.rondas || 3 }));
         } else {
           const fl = modo === 'trabajo_seg' ? 'sin_trabajo' : 'sin_descanso';
           if (filas.some(f => !f[fl] && !(modo === 'descanso_seg' && f.sin_trabajo) && (f[modo] == null || f[modo] === ''))) return toast('Completá el tiempo de todos los formatos, o tildá “no usa”', 'warn');
@@ -275,10 +276,10 @@ vista('/planificacion/biblioteca', ['admin', 'profesor'], async (main) => {
     sessionStorage.setItem('omega_zona', zona);
     const z = lista.filter(e => e.zona === zona && (!buscar || norm(e.nombre + ' ' + e.prog2 + ' ' + e.prog3).includes(norm(buscar))));
     main.innerHTML = `<div class="page-title"><h1>Biblioteca de ejercicios</h1><div class="actions">${adm ? '<button class="primary" id="nuevo">＋ Nuevo ejercicio</button>' : ''}</div></div>${tabsPlan('/planificacion/biblioteca')}
-      <p class="muted">Cada ejercicio tiene su progresión para el round 2 y el 3, tres imágenes (inicial, media y final) y puede llevar un video grabado por los profesores.</p>
+      <p class="muted">Cada ejercicio tiene su dos progresiones (cada formato usa 3, 2 o 1 niveles según sus rounds), tres imágenes (inicial, media y final) y puede llevar un video grabado por los profesores.</p>
       <div class="tabs">${ZONAS_UI.map(n => `<button data-z="${esc(n)}" class="${n === zona ? 'on' : ''}">${esc(n)} <span class="pill">${lista.filter(e => e.zona === n).length}</span></button>`).join('')}</div>
       <div class="row" style="margin-bottom:10px"><input id="q" type="search" placeholder="Buscar en ${esc(zona)}…" value="${esc(buscar)}" style="max-width:320px"><span class="small muted">${z.length} ejercicios</span></div>
-      <div class="tablewrap hbar" tabindex="0"><table style="min-width:900px"><thead><tr><th>Round 1</th><th>Round 2 (progresión)</th><th>Round 3 (progresión)</th><th>Equipo</th><th>Intensidad</th><th>Posiciones</th><th>Video</th><th></th></tr></thead><tbody>
+      <div class="tablewrap hbar" tabindex="0"><table style="min-width:900px"><thead><tr><th>Base</th><th>Progresión 1</th><th>Progresión 2</th><th>Equipo</th><th>Intensidad</th><th>Posiciones</th><th>Video</th><th></th></tr></thead><tbody>
       ${z.map(e => `<tr style="cursor:default"><td><b>${esc(e.nombre)}</b>${e.origen === 'propio' ? ' <span class="pill">propio</span>' : e.origen === 'sugerido' ? ' <span class="pill">IA</span>' : ''}</td><td>${esc(e.prog2)}</td><td>${esc(e.prog3)}</td><td>${esc(eqNombre(eq, e.equipo))}</td><td>${e.intensidad ? `<span class="pill ${e.intensidad === 'alta' ? 'rojo' : e.intensidad === 'moderada' ? 'amarillo' : ''}">${{ baja: 'Baja', moderada: 'Moderada', alta: 'Alta' }[e.intensidad]}</span>` : '—'}</td>
         <td><button class="sm" data-pos="${e.id}">▣ Ver 3 posiciones</button></td>
         <td>${e.video ? `<button class="sm" data-ver="${e.id}">▶ Ver</button>` : '<span class="vid-no">Sin video</span>'}</td>
@@ -389,8 +390,8 @@ function vistaCircuito(c, eq, clases, editable) {
       <div class="actions"><button id="b-play" class="primary">Cronómetro de la clase</button><button id="b-list">Lista de videos</button></div></div>
     <div class="row small muted" style="margin-bottom:10px"><span>Horarios: <b>${clases.map(x => hh(x.hora)).join(' · ') || '—'}</b></span><span>·</span><span>${c.sin_trabajo ? 'Clase corrida, sin intervalos' : 'Trabajo ' + seg(c.trabajo_seg) + (c.sin_descanso ? ' · sin descanso' : ' / descanso ' + seg(c.descanso_seg))}</span><span>·</span><span>Duración ≈ ${c.duracion_min} min</span><span>·</span><span>${c.estaciones} estaciones · ${c.personas_por_estacion} personas por estación</span></div>
     ${c.advertencias.map(a => `<div class="warnbox" style="margin-bottom:8px">⚠ ${esc(a)}</div>`).join('')}
-    <div class="tablewrap hbar" tabindex="0"><table style="min-width:820px"><thead><tr><th>Estación</th><th>Zona</th><th>Round 1 · base</th><th>Round 2 · progresión 1</th><th>Round 3 · progresión 2</th><th>Equipo</th><th>Video</th>${editable ? '<th></th>' : ''}</tr></thead><tbody>
-    ${slots.map(i => { const e1 = c.rondas[0].ejercicios[i], e2 = c.rondas[1].ejercicios[i], e3 = c.rondas[2].ejercicios[i]; if (e1.vacio) return `<tr style="cursor:default"><td><b>${i + 1}</b></td><td>${esc(e1.zona || '—')}</td><td colspan="${editable ? 6 : 5}"><span class="t-amarillo">Sin ejercicio</span>${editable ? ` <button class="sm primary" data-rep="${i}">Elegir ejercicio</button>` : ''}</td></tr>`; return `<tr style="cursor:default"><td><b>${i + 1}</b></td><td>${esc(e1.zona)}</td><td><button class="linklike" data-pos="${i}" title="Ver las 3 posiciones"><b>${esc(e1.nombre)}</b> ▣</button></td><td>${esc(e2.nombre)}</td><td>${esc(e3.nombre)}</td><td>${esc(eqNombre(eq, e1.equipo))}</td>
+    <div class="tablewrap hbar" tabindex="0"><table style="min-width:820px"><thead><tr><th>Estación</th><th>Zona</th>${c.rondas.map(r => `<th>Round ${r.ronda} · ${r.nivel_n === 1 ? 'base' : r.nivel_n === 2 ? 'progresión 1' : 'progresión 2'}</th>`).join('')}<th>Equipo</th><th>Video</th>${editable ? '<th></th>' : ''}</tr></thead><tbody>
+    ${slots.map(i => { const e1 = c.rondas[0].ejercicios[i], es = c.rondas.map(r => r.ejercicios[i]); if (e1.vacio) return `<tr style="cursor:default"><td><b>${i + 1}</b></td><td>${esc(e1.zona || '—')}</td><td colspan="${(editable ? 3 : 2) + c.rondas.length}"><span class="t-amarillo">Sin ejercicio</span>${editable ? ` <button class="sm primary" data-rep="${i}">Elegir ejercicio</button>` : ''}</td></tr>`; return `<tr style="cursor:default"><td><b>${i + 1}</b></td><td>${esc(e1.zona)}</td><td><button class="linklike" data-pos="${i}" title="Ver las posiciones del ejercicio"><b>${esc(e1.nombre)}</b> ▣</button></td>${es.slice(1).map(x => `<td>${esc(x.nombre)}</td>`).join('')}<td>${esc(eqNombre(eq, e1.equipo))}</td>
       <td>${e1.video ? `<button class="sm" data-ver="${i}">▶ Ver</button>` : `<label class="btn sm vid-no" style="margin:0">Subir<input type="file" accept="video/*" class="hidden" data-vid="${e1.ejercicio_id}"></label>`}</td>
       ${editable ? `<td class="right"><button class="sm" data-rep="${i}">Reemplazar</button></td>` : ''}</tr>`; }).join('')}</tbody></table></div>
     <div class="grid c2" style="margin-top:14px">
@@ -404,7 +405,7 @@ function enlazarCircuito(main, c, eq, editable) {
   $$('[data-ver]', main).forEach(b => b.onclick = () => { const e = c.rondas[0].ejercicios[Number(b.dataset.ver)]; verVideo({ id: e.ejercicio_id, nombre: e.nombre, video: e.video }, () => render()); });
   $$('[data-vid]', main).forEach(i => i.onchange = () => subirConProgreso(Number(i.dataset.vid), i.files[0], () => render()));
   $$('[data-rep]', main).forEach(b => b.onclick = () => reemplazar(c, Number(b.dataset.rep), eq));
-  $$('[data-pos]', main).forEach(b => b.onclick = () => { const i = Number(b.dataset.pos), e1 = c.rondas[0].ejercicios[i]; verPosiciones({ id: e1.ejercicio_id, nombre: e1.nombre, zona: e1.zona, equipo: e1.equipo, patron: e1.patron, fotos: e1.fotos, foto1: e1.fotos, prog2: c.rondas[1].ejercicios[i].nombre, prog3: c.rondas[2].ejercicios[i].nombre }, eq); });
+  $$('[data-pos]', main).forEach(b => b.onclick = () => { const i = Number(b.dataset.pos), e1 = c.rondas[0].ejercicios[i]; verPosiciones({ id: e1.ejercicio_id, nombre: e1.variantes[0], zona: e1.zona, equipo: e1.equipo, patron: e1.patron, fotos: e1.fotos, foto1: e1.fotos, prog2: e1.variantes[1], prog3: e1.variantes[2] }, eq); });
   $('#b-list', main).onclick = () => listaVideos(c);
   $('#b-play', main).onclick = () => cronometro(c);
 }
@@ -469,7 +470,7 @@ function cronometroLibre(c) {
 function cronometro(c) {
   if (c.sin_trabajo) return cronometroLibre(c);
   const E = c.estaciones; const T = c.trabajo_seg, D = c.sin_descanso ? 0 : c.descanso_seg;
-  const etapas = []; for (let r = 0; r < 3; r++) for (let t = 0; t < E; t++) etapas.push({ r, t });
+  const etapas = []; for (let r = 0; r < c.rondas.length; r++) for (let t = 0; t < E; t++) etapas.push({ r, t });
   let i = 0, fase = 'trabajo', resta = T, corriendo = false, ultimo = 0, fin = false;
   const m = modal('Cronómetro · ' + c.formato, '<div class="player" id="pl"></div>', { wide: true, onClose: () => { clearInterval(iv); try { if (wl) wl.release(); } catch (_) {} } });
   let ctxAudio = null, silencio = false;
@@ -487,10 +488,10 @@ function cronometro(c) {
   const pitidoLargo = () => beep(880, 1.0), pitidoCorto = () => beep(1320, 0.14);
   let wl = null; try { if (navigator.wakeLock) navigator.wakeLock.request('screen').then(w => { wl = w; }, () => {}); } catch (_) {}
   function pintar() {
-    if (fin) { $('#pl', m).innerHTML = '<div class="nombre">¡Clase terminada! 💪</div><p class="muted">Completaron los 3 rounds.</p><button class="primary" id="rs">Empezar de nuevo</button>'; $('#rs', m).onclick = () => { i = 0; fase = 'trabajo'; resta = T; fin = false; corriendo = false; pintar(); }; return; }
+    if (fin) { $('#pl', m).innerHTML = '<div class="nombre">¡Clase terminada! 💪</div><p class="muted">Completaron ' + (c.rondas.length === 1 ? 'el round' : 'los ' + c.rondas.length + ' rounds') + '.</p><button class="primary" id="rs">Empezar de nuevo</button>'; $('#rs', m).onclick = () => { i = 0; fase = 'trabajo'; resta = T; fin = false; corriendo = false; pintar(); }; return; }
     const et = etapas[i]; const m1 = Math.floor(resta / 60), s1 = resta % 60;
     const rot = c.rotacion[et.t];
-    $('#pl', m).innerHTML = `<div class="small muted">Round ${et.r + 1} de 3 · turno ${et.t + 1} de ${E}</div>
+    $('#pl', m).innerHTML = `<div class="small muted">Round ${et.r + 1} de ${c.rondas.length} · turno ${et.t + 1} de ${E}</div>
       <div class="fase ${fase}">${fase === 'trabajo' ? 'Trabajo' : 'Descanso'}</div><div class="crono">${m1}:${String(s1).padStart(2, '0')}</div>
       <div class="row" style="justify-content:center;margin:10px 0"><button class="primary big" id="pp">${corriendo ? 'Pausar' : (i === 0 && fase === 'trabajo' && resta === T ? 'Empezar' : 'Seguir')}</button><button id="sk">Saltar ›</button><button id="mu" class="ghost">${silencio ? '🔇 Sin sonido' : '🔊 Con sonido'}</button></div>
       <div class="tablewrap" style="text-align:left"><table><thead><tr><th>Grupo</th><th>Estación</th><th>Ejercicio</th></tr></thead><tbody>${rot.map((s, g) => `<tr style="cursor:default"><td>${g + 1}</td><td>${s + 1}</td><td><b>${esc(c.rondas[et.r].ejercicios[s].nombre)}</b></td></tr>`).join('')}</tbody></table></div>`;

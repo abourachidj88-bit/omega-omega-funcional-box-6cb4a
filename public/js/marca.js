@@ -207,7 +207,7 @@ async function qrEsquina(cont, esAdmin) {
 function textoSync(e) {
   if (!e.configurado) return '<span class="t-amarillo">Todavía no está conectada con la aplicación web (la que usan los alumnos desde el celular). Tocá “Sincronizar” para conectarla.</span>';
   const r = e.resultado;
-  const cuando = e.ultimo ? 'Última sincronización: <b>' + fmtF(e.ultimo.slice(0, 10)) + ' ' + new Date(e.ultimo).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + '</b>' : 'Todavía no se sincronizó';
+  const cuando = e.ultimo ? 'Última sincronización: <b>' + new Date(e.ultimo).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) + '</b>' : 'Todavía no se sincronizó';
   const est = r && !r.ok ? ` · <span class="t-rojo">${esc(r.error || 'error')}</span>` : e.pendientes ? ` · <span class="t-amarillo">${e.pendientes} cambios por enviar</span>` : ' · <span class="t-verde">al día ✓</span>';
   return cuando + est;
 }
@@ -228,6 +228,39 @@ async function barraSync(cont) {
         if (r.ok) toast(r.repoblada ? 'Se cargó toda la información en la aplicación web' : 'Sincronizado: ' + r.enviados + ' enviados · ' + r.recibidos + ' recibidos'); else toast(r.error, 'err');
       } catch (er) { fail(er); }
       pintar();
+    };
+  };
+  pintar();
+  actualizacionAviso(cont);
+}
+
+// Actualización automática: si la aplicación web publicó una versión nueva, la PC ya la descargó; el administrador la aplica con un botón.
+async function actualizacionAviso(cont) {
+  if (S.user.rol !== 'admin') return;
+  let a; try { a = await api('GET', '/actualizacion/estado'); } catch (_) { return; }
+  if (!a.habilitada) return;
+  const caja = document.createElement('div'); caja.className = 'card syncbar'; caja.id = 'act-caja'; cont.appendChild(caja);
+  const pintar = () => {
+    const v = a.version || {};
+    const ver = esc(v.nombre || '') + (v.revision ? ' (rev. ' + v.revision + ')' : '');
+    caja.innerHTML = a.lista_para_aplicar
+      ? `<div class="row between"><div><b>Hay una versión nueva</b><div class="small">${esc((a.disponible && a.disponible.nombre) || 'Versión nueva')}${a.disponible && a.disponible.revision ? ' (rev. ' + a.disponible.revision + ')' : ''} ya está descargada. Estás usando ${ver}. Al actualizar, OMEGA se reinicia solo en unos segundos y no se pierde ningún dato.</div></div>
+        <button class="primary" id="act-ap">⬆ Actualizar ahora</button></div>`
+      : `<div class="row between"><div class="small muted">Aplicación: ${ver} · ${a.error ? '<span class="t-amarillo">' + esc(a.error) + '</span>' : 'actualizada ✓'}</div><button class="sm" id="act-bu">Buscar actualización</button></div>`;
+    const ap = $('#act-ap', caja), bu = $('#act-bu', caja);
+    if (bu) bu.onclick = async () => { bu.disabled = true; bu.innerHTML = '<span class="spinner"></span> Buscando…'; try { a = await api('POST', '/actualizacion/buscar', {}); } catch (er) { fail(er); } pintar(); };
+    if (ap) ap.onclick = async () => {
+      ap.disabled = true; ap.innerHTML = '<span class="spinner"></span> Reiniciando…';
+      try {
+        const r = await api('POST', '/actualizacion/aplicar', {});
+        if (!r.ok) { toast(r.mensaje || 'No se pudo actualizar', 'warn'); pintar(); return; }
+        const antes = (a.version || {}).revision;
+        for (let i = 0; i < 60; i++) {
+          await new Promise(x => setTimeout(x, 1000));
+          try { const n = await fetch('/api/actualizacion/estado', { headers: { Authorization: 'Bearer ' + S.token } }); if (n.ok || n.status === 401) { const j = n.ok ? await n.json() : null; if (!j || (j.version && (j.version.revision !== antes || j.version.numero !== (a.version || {}).numero))) { location.reload(); return; } if (i > 20) { location.reload(); return; } } } catch (_) {}
+        }
+        location.reload();
+      } catch (er) { fail(er); pintar(); }
     };
   };
   pintar();

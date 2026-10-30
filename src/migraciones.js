@@ -35,6 +35,11 @@ function aplicar(db) {
   add('formatos', 'sin_descanso', 'INTEGER NOT NULL DEFAULT 0');  // 1 = el formato no usa intervalos de descanso
   add('formatos', 'duracion_min', 'INTEGER');                     // duración de la clase cuando no usa intervalos (por defecto 60)
 
+  // ---- Versión 5
+  const eraNueva = !cols('formatos').includes('rondas');
+  add('formatos', 'rondas', 'INTEGER NOT NULL DEFAULT 3');        // cantidad de rounds del formato (1, 2 o 3); con menos de 3 se usan las progresiones más exigentes
+  if (eraNueva) db.exec("UPDATE formatos SET rondas = 2 WHERE nombre IN ('Flex', 'Z7') AND activo = 1");   // Flex y Z7 se hacen en 2 rounds
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS campanas (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

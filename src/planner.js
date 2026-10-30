@@ -167,8 +167,14 @@ function generarRango(desde, dias, rehacer = false, modo = null) {
 function expandirCircuito(circ, formato, ejMap) {
   const { porEstacion, estaciones } = cfgFormato(formato);
   const slots = JSON.parse(circ.slots);
-  const rondas = [1, 2, 3].map(n => ({
-    ronda: n,
+  // Cada ejercicio tiene 3 niveles (base, progresión 1, progresión 2). Con 3 rounds se hacen los tres; con 2 rounds, las 2 más exigentes
+  // (progresión 1 y 2); con 1 round, la más exigente.
+  const nRondas = Math.max(1, Math.min(3, parseInt(formato.rondas, 10) || 3));
+  const niveles = [1, 2, 3].slice(3 - nRondas);
+  const NOMBRE_NIVEL = { 1: 'Base', 2: 'Progresión 1', 3: 'Progresión 2' };
+  const rondas = niveles.map((n, k) => ({
+    ronda: k + 1,
+    nivel_n: n,
     ejercicios: slots.map((s, i) => {
       const e = ejMap.get(s.ejercicio_id);
       if (!s.ejercicio_id) return { slot: i, ejercicio_id: 0, zona: s.zona, nombre: '(elegir ejercicio)', vacio: true };
@@ -176,7 +182,7 @@ function expandirCircuito(circ, formato, ejMap) {
       return {
         slot: i, ejercicio_id: e.id, zona: e.zona, equipo: e.equipo, unidades: e.unidades,
         nombre: n === 1 ? e.nombre : n === 2 ? e.prog2 : e.prog3,
-        nivel: n === 1 ? 'Base' : n === 2 ? 'Progresión 1' : 'Progresión 2',
+        nivel: NOMBRE_NIVEL[n], nivel_n: n, variantes: [e.nombre, e.prog2, e.prog3],
         video: e.video || null, patron: e.patron || null, intensidad: e.intensidad || null, fotos: [e.img1, e.img2, e.img3].some(Boolean),
       };
     }),
@@ -192,8 +198,8 @@ function expandirCircuito(circ, formato, ejMap) {
     trabajo_seg: trabajo, descanso_seg: descanso, sin_trabajo: sinTrabajo, sin_descanso: sinDescanso, plantilla: circ.plantilla,
     advertencias: circ.advertencias ? JSON.parse(circ.advertencias) : [],
     personas_por_estacion: porEstacion, estaciones,
-    duracion_min: sinTrabajo ? claseMin : (turno ? Math.round((3 * estaciones * turno) / 60 * 10) / 10 : null),
-    rondas, rotacion,
+    duracion_min: sinTrabajo ? claseMin : (turno ? Math.round((nRondas * estaciones * turno) / 60 * 10) / 10 : null),
+    rondas_n: nRondas, rondas, rotacion,
     equipos: Object.entries(demandaDe(slots.map(s => ejMap.get(s.ejercicio_id)), porEstacion)).map(([k, v]) => ({ clave: k, necesita: v })),
   };
 }

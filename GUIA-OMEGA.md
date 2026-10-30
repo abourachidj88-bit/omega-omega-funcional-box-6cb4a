@@ -10,6 +10,12 @@ Aplicación web (se usa desde el navegador y se instala en el celular como app, 
 
 Copia de seguridad automática **todos los días a las 22:00** (hora de Argentina).
 
+## Versión 5
+- **Rounds por formato:** en Planificación → Formatos e Intervalos → *Editar Formatos* elegís 3, 2 o 1 rounds por formato. Con menos de 3 rounds se usan las progresiones más exigentes de cada ejercicio. Flex y Z7 vienen con 2.
+- **Aplicación de escritorio:** el icono OMEGA abre una ventana propia (no usa el navegador). Requiere Windows 10 o más nuevo; el instalador detecta solo si es de 32 o 64 bits. “OMEGA (navegador)” del menú Inicio abre la versión de siempre.
+- **Actualización automática:** cuando la aplicación web tiene una versión más nueva, en la pantalla de inicio aparece **“Hay una versión nueva — Actualizar ahora”**. Se reinicia solo en unos segundos y los datos no se tocan. Si la nueva falla, vuelve a la anterior. Registro: `C:\OMEGA\omega.log`; versiones descargadas: `C:\OMEGA\actualizacion`.
+- **Publicar una versión nueva para todos los gimnasios:** subir el código al repositorio de GitHub de cada gimnasio (Render lo despliega solo); sus PC lo descargan.
+
 ## Versión 2
 Novedades (incluye permisos por usuario, nuevo Estado de resultados y Presupuesto con Excel, rutinas por cliente): ver `CHANGELOG.md`. El instalador es `OMEGA-Setup-Version2.exe` (conserva los datos de la Versión 1; antes de la primera apertura se hace una copia automática). Para la aplicación web hay que volver a subir el código a GitHub (ver `GUIA-NUBE.md`, sección “Actualizar a la Versión 2”).
 
@@ -21,7 +27,7 @@ Un antivirus desconfía de programas nuevos que no están firmados. **Un "certif
 1. **Firmar el instalador** con un certificado de firma de código (OV o EV, de venta en entidades certificantes; o el servicio Azure Trusted Signing). Con el certificado en un archivo `.pfx`: `OMEGA_PFX=ruta.pfx OMEGA_PFX_CLAVE=… bash installer/build.sh` (requiere `osslsigncode` en la máquina de armado). Con certificado OV la reputación se gana con el uso; con EV es inmediata.
 2. **Informar el falso positivo**: subir el instalador a https://www.microsoft.com/wdsi/filesubmission y al sitio de tu antivirus. El archivo `.sha256` que acompaña al instalador sirve para verificar que no fue alterado.
 3. **Excepción local** (PC vieja con antivirus molesto): agregar la carpeta `C:\OMEGA` a las exclusiones del antivirus (en Windows Defender: Seguridad de Windows → Protección contra virus → Administrar la configuración → Exclusiones).
-La ventana negra minimizada "OMEGA servidor" es el servidor del sistema; se cierra con "Detener OMEGA".
+Desde la Versión 4 el servidor corre en segundo plano, sin ventana negra: no se ve nada salvo la ventana de OMEGA. Se apaga con "Detener OMEGA" (menú Inicio). El registro queda en `C:\OMEGA\omega.log`. Si OMEGA no abre, ejecutá `modo-visible.bat` (carpeta de instalación) para ver el servidor en pantalla y el posible error.
 
 ## Instalador de 32 o 64 bits
 `OMEGA-Setup-Version3.exe` trae los dos motores y, al instalar, pregunta si es de **32 o 64 bits** (propone el que corresponde a la PC). También se entrega `OMEGA-Setup-Version3-32bits.exe`, más chico, para PCs viejas. Si no sabés cuál es tu PC: Configuración → Sistema → Acerca de → "Tipo de sistema".

@@ -23,14 +23,16 @@ const pausa = (ms) => new Promise(r => setTimeout(r, ms));
   let mock, alta;
   try {
     // --- GitHub y Render simulados (Render "crea" un nodo OMEGA real con las variables recibidas)
-    const llamadas = []; const PN = rnd();
+    const llamadas = []; const PN = rnd(); let ramas = 0, intentosSv = 0;
     mock = http.createServer((req, res) => {
       let b = ''; req.on('data', d => b += d); req.on('end', () => {
         const cuerpo = b ? JSON.parse(b) : null; llamadas.push([req.method, req.url, req.headers.authorization, cuerpo]);
         const j = (c, o) => { res.writeHead(c, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); };
         if (req.url === '/user') return j(200, { login: 'dueno' });
         if (req.url.endsWith('/generate')) return j(201, { html_url: 'https://github.com/dueno/' + cuerpo.name });
+        if (/\/branches\//.test(req.url)) { ramas++; return ramas <= 2 ? j(404, { message: 'Branch not found' }) : j(200, { name: 'main' }); }
         if (req.url.startsWith('/owners')) return j(200, [{ owner: { id: 'tea-1' } }]);
+        if (req.url === '/services' && req.method === 'POST' && ++intentosSv === 1) return j(400, { message: 'branch main does not exist in the repository' });
         if (req.url === '/services' && req.method === 'POST') {
           const env = Object.fromEntries(cuerpo.envVars.map(e => [e.key, e.value])); const pn = rnd() + 1500;
           arrancar({ PORT: pn, OMEGA_NODO: env.OMEGA_NODO, SYNC_CLAVE: env.SYNC_CLAVE });
@@ -65,6 +67,7 @@ const pausa = (ms) => new Promise(r => setTimeout(r, ms));
     let e = null; for (let i = 0; i < 300; i++) { e = (await api(PC, 'GET', '/api/sync/crear-nube', undefined, tk)).data; if (e.estado !== 'en_curso') break; await pausa(200); }
     assert.equal(e.estado, 'listo', JSON.stringify(e)); paso('el alta termina sola: repositorio + servicio + conexión');
     r = await api(PC, 'GET', '/api/sync/estado', undefined, tk); assert.equal(r.data.configurado, true); assert.ok(r.data.ultimo); paso('la PC queda conectada y sincronizada, sin pasos manuales');
+    assert.ok(ramas >= 3 && intentosSv >= 2); paso('espera a que GitHub termine de copiar la plantilla y reintenta si Render todavía no ve la rama (error real que apareció en la prueba)');
     const gen = llamadas.find(l => l[1].endsWith('/generate')); assert.match(gen[3].name, /^omega-gimnasio-sol-[0-9a-f]{5}$/); assert.equal(gen[2], 'Bearer ghp_prueba'); paso('el repositorio se creó con el nombre del gimnasio y la clave de GitHub vive solo en el servicio');
     const srvLl = llamadas.find(l => l[1] === '/services'); const claveSync = srvLl[3].envVars.find(x => x.key === 'SYNC_CLAVE').value; assert.ok(claveSync.length >= 30);
     const nube = (await api(PC, 'GET', '/api/sync/estado', undefined, tk)).data.url;

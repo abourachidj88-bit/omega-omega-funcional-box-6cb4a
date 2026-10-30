@@ -9,6 +9,7 @@ const srv = http.createServer((req, res) => {
     const j = (c, o) => { res.writeHead(c, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); };
     if (req.url === '/user') return j(200, { login: 'dueno' });
     if (req.url.endsWith('/generate')) return j(201, { html_url: 'https://github.com/dueno/omega-gimnasio-sol' });
+    if (/\/branches\//.test(req.url)) return j(200, { name: 'main' });
     if (req.url.startsWith('/owners')) return j(200, [{ owner: { id: 'tea-1', name: 'x' } }]);
     if (req.url === '/services' && req.method === 'POST') return j(201, { service: { id: 'srv-1', serviceDetails: { url: 'http://127.0.0.1:' + srv.address().port } } });
     if (req.url === '/api/estado') return j(200, { ok: true });

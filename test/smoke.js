@@ -49,8 +49,8 @@ const lunesSemana = () => { const d = new Date(hoy() + 'T00:00:00Z'); return sum
     r = await api('POST', '/api/planificacion/generar', { desde: lunesSemana(), dias: 28 }, prof); assert.equal(r.status, 200); assert.ok(r.data.creados > 0); paso('genera 4 semanas de circuitos (' + r.data.creados + ' circuitos)');
     r = await api('GET', '/api/planificacion?desde=' + lunesSemana() + '&dias=1', undefined, prof);
     const clases = r.data[0].clases; assert.ok(clases.length >= 1);
-    const c0 = clases.find(c => c.circuito).circuito; assert.equal(c0.rondas.length, 3); c0.rondas.forEach(x => assert.equal(x.ejercicios.length, 5));
-    c0.rondas[0].ejercicios.forEach((e, i) => { assert.notEqual(e.nombre, c0.rondas[1].ejercicios[i].nombre); assert.notEqual(c0.rondas[1].ejercicios[i].nombre, c0.rondas[2].ejercicios[i].nombre); });
+    const c0 = clases.find(c => c.circuito).circuito; assert.equal(c0.rondas.length, c0.rondas_n); assert.ok(c0.rondas_n >= 1 && c0.rondas_n <= 3); c0.rondas.forEach(x => assert.equal(x.ejercicios.length, 5));
+    c0.rondas[0].ejercicios.forEach((e, i) => { for (let k = 1; k < c0.rondas.length; k++) assert.notEqual(c0.rondas[k - 1].ejercicios[i].nombre, c0.rondas[k].ejercicios[i].nombre); });
     paso('cada formato tiene 3 rounds × 5 ejercicios con progresión distinta en cada round');
     // equipamiento nunca supera el stock
     const stock = Object.fromEntries((await api('GET', '/api/equipamiento', undefined, admin)).data.map(e => [e.clave, e.cantidad]));

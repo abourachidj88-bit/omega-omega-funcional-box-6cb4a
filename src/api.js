@@ -554,12 +554,13 @@ route('PUT', '/api/formatos', ADM, async ({ req }) => {
         const cupo = f.cupo_estacion === undefined ? ex.cupo_estacion : (f.cupo_estacion === null || f.cupo_estacion === '' ? null : Math.max(1, Math.min(30, parseInt(f.cupo_estacion, 10) || 1)));
         const imin = f.intensidad_min === undefined ? ex.intensidad_min : (['baja', 'moderada', 'alta'].includes(f.intensidad_min) ? f.intensidad_min : null);
         const dur = f.duracion_min === undefined ? ex.duracion_min : (f.duracion_min === null || f.duracion_min === '' ? null : Math.max(1, Math.min(600, parseInt(f.duracion_min, 10) || 60)));
-        run('UPDATE formatos SET nombre = ?, trabajo_seg = ?, descanso_seg = ?, color = ?, orden = ?, cupo_estacion = ?, intensidad_min = ?, sin_trabajo = ?, sin_descanso = ?, duracion_min = ? WHERE id = ?',
+        const rondas = f.rondas === undefined ? (ex.rondas || 3) : Math.max(1, Math.min(3, parseInt(f.rondas, 10) || 3));
+        run('UPDATE formatos SET nombre = ?, trabajo_seg = ?, descanso_seg = ?, color = ?, orden = ?, cupo_estacion = ?, intensidad_min = ?, sin_trabajo = ?, sin_descanso = ?, duracion_min = ?, rondas = ? WHERE id = ?',
           nombre || ex.nombre, t !== undefined ? t : (f.trabajo_seg === null ? null : ex.trabajo_seg), d !== undefined ? d : (f.descanso_seg === null ? null : ex.descanso_seg), f.color || ex.color, f.orden ?? i + 1, cupo, imin,
-          flag(f.sin_trabajo, ex.sin_trabajo), flag(f.sin_descanso, ex.sin_descanso), dur, ex.id);
+          flag(f.sin_trabajo, ex.sin_trabajo), flag(f.sin_descanso, ex.sin_descanso), dur, rondas, ex.id);
       } else if (nombre) {
         if (get('SELECT 1 AS x FROM formatos WHERE nombre = ?', nombre)) throw bad('Ya existe el formato ' + nombre);
-        run('INSERT INTO formatos (nombre, trabajo_seg, descanso_seg, color, orden, sin_trabajo, sin_descanso, duracion_min) VALUES (?,?,?,?,?,?,?,?)', nombre, seg(f.trabajo_seg) ?? null, seg(f.descanso_seg) ?? null, f.color || '#4da3ff', i + 1, flag(f.sin_trabajo, 0), flag(f.sin_descanso, 0), f.duracion_min ? Math.max(1, Math.min(600, parseInt(f.duracion_min, 10) || 60)) : null);
+        run('INSERT INTO formatos (nombre, trabajo_seg, descanso_seg, color, orden, sin_trabajo, sin_descanso, duracion_min, rondas) VALUES (?,?,?,?,?,?,?,?,?)', nombre, seg(f.trabajo_seg) ?? null, seg(f.descanso_seg) ?? null, f.color || '#4da3ff', i + 1, flag(f.sin_trabajo, 0), flag(f.sin_descanso, 0), f.duracion_min ? Math.max(1, Math.min(600, parseInt(f.duracion_min, 10) || 60)) : null, f.rondas === undefined ? 3 : Math.max(1, Math.min(3, parseInt(f.rondas, 10) || 3)));
       }
     });
   });
@@ -756,6 +757,7 @@ v1.registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str, num
 // ------------------------------------------------------------ Versión 2 (país, campañas, reservas, rutinas, deshacer pagos, estado de resultados)
 v2.registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str, num, requireFecha, fechaOpc, soloDigitos, validarFoto, normTel, bajaEfectiva, semaforoAlta, listaClientes });
 require('./api-v4').registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str });
+require('./api-v4').registrarV5({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str });
 require('./api-v3').registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str, num, requireFecha, fechaOpc, soloDigitos, normTel, claseAhora, registrarAsistencia, semaforoAlta, horasDeAgenda, asegurarSesion });
 // ------------------------------------------------------------ despacho
 async function dispatch(req, pathname, query) {

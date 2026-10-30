@@ -157,6 +157,7 @@ if (process.env.OMEGA_LANZADOR === '1') { // ficha para poder apagar el servidor
 }
 backup.iniciarProgramador();
 sync.iniciarProgramador();
+try { require('./src/actualizar').iniciarProgramador(); } catch (e) { console.error('actualización automática:', e.message); }
 iniciarAutoPlan();
 // Al instalar una versión nueva se hace una copia de seguridad antes de seguir (los datos nunca se pierden)
 {

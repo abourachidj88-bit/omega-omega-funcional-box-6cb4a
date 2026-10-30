@@ -18,7 +18,7 @@ const esperar = async (u) => { for (let i = 0; i < 80; i++) { try { await fetch(
     const PN = rnd(); mock = http.createServer((req, res) => { let b = ''; req.on('data', d => b += d); req.on('end', () => {
       const c = b ? JSON.parse(b) : null; const j = (s, o) => { res.writeHead(s, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); };
       if (req.url === '/user') return j(200, { login: 'dueno' }); if (req.url.endsWith('/generate')) return j(201, { html_url: 'https://github.com/dueno/' + c.name });
-      if (req.url.startsWith('/owners')) return j(200, [{ owner: { id: 't' } }]);
+      if (/\/branches\//.test(req.url)) return j(200, { name: 'main' }); if (req.url.startsWith('/owners')) return j(200, [{ owner: { id: 't' } }]);
       if (req.url === '/services') { const env = Object.fromEntries(c.envVars.map(e => [e.key, e.value])); const pn = rnd() + 1500; arrancar({ PORT: pn, OMEGA_NODO: env.OMEGA_NODO, SYNC_CLAVE: env.SYNC_CLAVE }); return j(201, { service: { id: 's', serviceDetails: { url: 'http://127.0.0.1:' + pn } } }); }
       j(404, {}); }); }).listen(PN);
     process.env.GITHUB_API = process.env.RENDER_API = 'http://127.0.0.1:' + PN; process.env.GITHUB_TOKEN = 'g'; process.env.RENDER_API_KEY = 'r';

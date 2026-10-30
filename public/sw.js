@@ -1,7 +1,7 @@
 'use strict';
 // Service worker de OMEGA: la app abre rápido y muestra la última versión conocida si se corta internet.
 // Los datos (API) y los videos siempre se piden al servidor.
-const CACHE = 'omega-ver4-0';
+const CACHE = 'omega-ver4-2';
 self.addEventListener('install', (e) => { self.skipWaiting(); });
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));

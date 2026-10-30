@@ -2,11 +2,19 @@
 
 Cada modificación que se pide genera una **versión nueva** (1, 2, 3…) a partir de la anterior. Las versiones anteriores quedan guardadas intactas en `OMEGA-versiones/Version-N/` (código fuente, instalador y versión de prueba). Los datos del gimnasio (`C:\OMEGA\datos`) se conservan al pasar de una versión a otra; antes de usar una versión nueva por primera vez OMEGA hace una copia de seguridad automática.
 
+## Versión 5 — 30/10/2026
+- **Rounds por formato (Planificación → Formatos e Intervalos → “Editar Formatos”):** cada formato puede tener 3, 2 o 1 rounds, a elección del administrador o profesor. Con 3 rounds se hacen la base y las 2 progresiones; con **2 rounds la IA usa las 2 progresiones más exigentes de cada ejercicio**; con 1 round, la más exigente. Flex y Z7 vienen con 2 rounds (al actualizar desde la V4 se cargan así una sola vez; el resto queda en 3). Cambian la vista del circuito, el cronómetro, la duración de la clase y la pantalla del alumno.
+- **Aplicación de escritorio (Windows 10 o más nuevo, 32 y 64 bits):** OMEGA se abre en su propia ventana, sin depender de Edge o Chrome (motor Electron 38 incluido). El servidor sigue corriendo en segundo plano (copias de las 22:00, celulares, sincronización). En Windows 7/8 se sigue usando el navegador. El menú Inicio trae también “OMEGA (navegador)”.
+- **Actualización automática desde la aplicación web:** la PC consulta a la web del gimnasio; si hay una versión más nueva la descarga (verificada), y el administrador la aplica con el botón **“Actualizar ahora”** (en la pantalla de inicio, junto a Sincronizar). OMEGA se reinicia solo y no se toca ningún dato. Si la versión nueva no arranca, vuelve sola a la anterior. Para publicar una versión: subir el código al repositorio de GitHub del gimnasio (Render lo despliega y las PC lo toman).
+- **Instalador:** detecta solo si Windows es de 32 o de 64 bits (se puede cambiar), actualiza una V4 instalada conservando datos, copias, usuarios y conexión con la nube.
+
 ## Versión 4 — 29/10/2026
 - **Alta del gimnasio en el primer inicio:** al abrir OMEGA por primera vez pide el nombre del gimnasio y el logo (el logo también es el ícono de la app) junto con el usuario del administrador.
 - **Sincronizar automático:** el botón crea solo, sin pasos manuales, el repositorio en GitHub y el servicio en Render del gimnasio nuevo y completa la dirección, la clave SYNC y la conexión. Muestra el progreso y puede tardar unos minutos.
 - **Servicio de alta (`servicio-alta/`):** lo despliega una vez el dueño del sistema; guarda las claves de GitHub y Render. Las PCs de los gimnasios solo traen un código de alta (archivo `alta.txt`) y nunca ven esas claves. Tiene límite de altas por hora y no duplica repositorios si se reintenta.
 - Si una instalación no trae el acceso al servicio de alta, queda el modo manual (dirección + clave o código de conexión).
+- *Revisión 2:* se quitó la ventana negra "OMEGA servidor": el servidor ahora corre como proceso interno en segundo plano (motor sin consola `omega-oculto.exe`). Registro en `C:\OMEGA\omega.log`; `modo-visible.bat` para diagnóstico.
+- *Revisión 1:* la fecha de la "Última sincronización" se mostraba con el día siguiente por la noche (tomaba la fecha en UTC); ahora usa la hora de Argentina.
 
 ## Versión 3 — 29/10/2026
 **Instalador**

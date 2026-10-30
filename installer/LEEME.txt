@@ -1,7 +1,9 @@
 OMEGA - Sistema de gestión del gimnasio
 
-Abrir:        icono OMEGA del escritorio (primera pantalla: ingreso de Administrador o Profesor).
-              Se abre una ventana negra minimizada "OMEGA servidor": ES el servidor. No la cierres (para apagarlo usá "Detener OMEGA").
+Abrir:        icono OMEGA del escritorio: se abre en su propia ventana (Windows 10 o más nuevo). "OMEGA (navegador)" del menú Inicio lo abre en el navegador.
+              Actualizaciones: si la aplicación web trae una versión nueva, aparece "Actualizar ahora" en la pantalla de inicio.
+              El servidor corre en segundo plano, sin ventanas (para apagarlo usá "Detener OMEGA" del menú Inicio; el registro queda en C:\OMEGA\omega.log).
+              Si OMEGA no abre, ejecutá modo-visible.bat (carpeta de instalación): muestra el servidor en pantalla y el posible error.
 Datos:        C:\OMEGA\datos          (base de datos y videos; nunca se borran al actualizar o desinstalar)
 Copias:       ver C:\OMEGA\config.txt (BACKUP_DIR). Automáticas todos los días a las 22:00.
 Celulares:    misma WiFi -> http://IP-DE-ESTA-PC:3000  (IP con el comando ipconfig)

@@ -23,3 +23,4 @@ installer/stage/
 # Otros
 node_modules/
 .DS_Store
+installer/electron/

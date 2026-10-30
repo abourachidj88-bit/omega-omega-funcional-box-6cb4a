@@ -25,6 +25,7 @@
 !include "LogicLib.nsh"
 !include "x64.nsh"
 !include "nsDialogs.nsh"
+!include "WinVer.nsh"
 
 Name "OMEGA - ${VERSION_NOMBRE}"
 OutFile "${SALIDA}"
@@ -32,6 +33,7 @@ InstallDir "$PROGRAMFILES\OMEGA"
 InstallDirRegKey HKLM "Software\OMEGA" "Carpeta"
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma
+SetCompressorDictSize 96
 VIProductVersion "${VERSION_NUM}"
 VIAddVersionKey "ProductName" "OMEGA - Gestión de gimnasio"
 VIAddVersionKey "CompanyName" "Gimnasio OMEGA"
@@ -46,7 +48,7 @@ VIAddVersionKey "InternalName" "OMEGA-Setup"
 !define MUI_UNICON "omega.ico"
 !define MUI_ABORTWARNING
 !define MUI_WELCOMEPAGE_TITLE "Instalar OMEGA"
-!define MUI_WELCOMEPAGE_TEXT "Este asistente instala OMEGA (${VERSION_NOMBRE}), el sistema de gestión del gimnasio.$\r$\n$\r$\nSe crea un icono en el escritorio. La base de datos se guarda en C:\OMEGA\datos y no se borra al actualizar ni al desinstalar."
+!define MUI_WELCOMEPAGE_TEXT "Este asistente instala OMEGA (${VERSION_NOMBRE}), el sistema de gestión del gimnasio.$\r$\n$\r$\nEl instalador detecta solo si Windows es de 32 o de 64 bits. Se crea un icono en el escritorio que abre OMEGA en su propia ventana. La base de datos se guarda en C:\OMEGA\datos y no se borra al actualizar ni al desinstalar."
 !define MUI_FINISHPAGE_RUN ""
 !define MUI_FINISHPAGE_RUN_FUNCTION LanzarOmega
 !define MUI_FINISHPAGE_RUN_TEXT "Abrir OMEGA ahora"
@@ -55,6 +57,7 @@ Var ArqSel
 Var ArqR64
 Var ArqR32
 Var EsNueva
+Var Escritorio
 
 !insertmacro MUI_PAGE_WELCOME
 !ifndef SOLO64
@@ -140,7 +143,11 @@ Function PaginaArqSalir
 FunctionEnd
 
 Function LanzarOmega
-  Exec '"$INSTDIR\runtime\omega-node.exe" --disable-warning=ExperimentalWarning "$INSTDIR\app\lanzador.js"'
+  ${If} ${FileExists} "$INSTDIR\escritorio\OMEGA.exe"
+    Exec '"$INSTDIR\escritorio\OMEGA.exe"'
+    Return
+  ${EndIf}
+  Exec '"$INSTDIR\runtime\omega-oculto.exe" --disable-warning=ExperimentalWarning "$INSTDIR\app\lanzador.js"'
 FunctionEnd
 
 Section "OMEGA (obligatorio)" SecBase
@@ -153,6 +160,8 @@ Section "OMEGA (obligatorio)" SecBase
     ; instalación de una versión anterior (sin apagado ordenado)
     nsExec::Exec 'taskkill /IM omega-node.exe /F'
   ${EndIf}
+  nsExec::Exec 'taskkill /IM OMEGA.exe /F'
+  nsExec::Exec 'taskkill /IM omega-oculto.exe /F'
   Sleep 1500
   SetOutPath "$INSTDIR"
   RMDir /r "$INSTDIR\app"
@@ -161,8 +170,24 @@ Section "OMEGA (obligatorio)" SecBase
   CreateDirectory "$INSTDIR\runtime"
   ${If} $ArqSel == "64"
     File "/oname=$INSTDIR\runtime\omega-node.exe" "nodos\x64\omega-node.exe"
+    File "/oname=$INSTDIR\runtime\omega-oculto.exe" "nodos\x64\omega-oculto.exe"
   ${Else}
     File "/oname=$INSTDIR\runtime\omega-node.exe" "nodos\x86\omega-node.exe"
+    File "/oname=$INSTDIR\runtime\omega-oculto.exe" "nodos\x86\omega-oculto.exe"
+  ${EndIf}
+
+  ; Aplicación de escritorio (ventana propia, independiente del navegador). Windows 10 o más nuevo; en uno más viejo se sigue usando el navegador.
+  RMDir /r "$INSTDIR\escritorio"
+  StrCpy $Escritorio "0"
+  ${If} ${AtLeastWin10}
+    SetOutPath "$INSTDIR\escritorio"
+    ${If} $ArqSel == "64"
+      File /r "electron\x64\*.*"
+    ${Else}
+      File /r "electron\x86\*.*"
+    ${EndIf}
+    StrCpy $Escritorio "1"
+    SetOutPath "$INSTDIR"
   ${EndIf}
 
   ; Carpetas de datos (se conservan siempre)
@@ -219,13 +244,21 @@ Section "OMEGA (obligatorio)" SecBase
   ${EndIf}
   !endif
 
-  ; Accesos directos (el motor de OMEGA ejecuta el lanzador; la ventana queda minimizada)
+  ; Accesos directos. Con la aplicación de escritorio, OMEGA.lnk la abre (y ella inicia el servidor en segundo plano si hace falta).
+  ; "OMEGA (navegador)" abre OMEGA en el navegador, como en las versiones anteriores.
   Delete "$DESKTOP\OMEGA.lnk"
-  CreateShortcut "$DESKTOP\OMEGA.lnk" "$INSTDIR\runtime\omega-node.exe" '--disable-warning=ExperimentalWarning "$INSTDIR\app\lanzador.js"' "C:\OMEGA\omega.ico" 0 SW_SHOWMINIMIZED "" "Abrir OMEGA"
   CreateDirectory "$SMPROGRAMS\OMEGA"
   Delete "$SMPROGRAMS\OMEGA\OMEGA.lnk"
-  CreateShortcut "$SMPROGRAMS\OMEGA\OMEGA.lnk" "$INSTDIR\runtime\omega-node.exe" '--disable-warning=ExperimentalWarning "$INSTDIR\app\lanzador.js"' "C:\OMEGA\omega.ico" 0 SW_SHOWMINIMIZED "" "Abrir OMEGA"
-  CreateShortcut "$SMPROGRAMS\OMEGA\Detener OMEGA.lnk" "$INSTDIR\runtime\omega-node.exe" '--disable-warning=ExperimentalWarning "$INSTDIR\app\lanzador.js" --detener' "C:\OMEGA\omega.ico" 0 SW_SHOWMINIMIZED
+  Delete "$SMPROGRAMS\OMEGA\OMEGA (navegador).lnk"
+  ${If} $Escritorio == "1"
+    CreateShortcut "$DESKTOP\OMEGA.lnk" "$INSTDIR\escritorio\OMEGA.exe" "" "C:\OMEGA\omega.ico" 0 SW_SHOWNORMAL "" "Abrir OMEGA"
+    CreateShortcut "$SMPROGRAMS\OMEGA\OMEGA.lnk" "$INSTDIR\escritorio\OMEGA.exe" "" "C:\OMEGA\omega.ico" 0 SW_SHOWNORMAL "" "Abrir OMEGA"
+    CreateShortcut "$SMPROGRAMS\OMEGA\OMEGA (navegador).lnk" "$INSTDIR\runtime\omega-oculto.exe" '--disable-warning=ExperimentalWarning "$INSTDIR\app\lanzador.js"' "C:\OMEGA\omega.ico" 0 SW_SHOWNORMAL "" "Abrir OMEGA en el navegador"
+  ${Else}
+    CreateShortcut "$DESKTOP\OMEGA.lnk" "$INSTDIR\runtime\omega-oculto.exe" '--disable-warning=ExperimentalWarning "$INSTDIR\app\lanzador.js"' "C:\OMEGA\omega.ico" 0 SW_SHOWNORMAL "" "Abrir OMEGA"
+    CreateShortcut "$SMPROGRAMS\OMEGA\OMEGA.lnk" "$INSTDIR\runtime\omega-oculto.exe" '--disable-warning=ExperimentalWarning "$INSTDIR\app\lanzador.js"' "C:\OMEGA\omega.ico" 0 SW_SHOWNORMAL "" "Abrir OMEGA"
+  ${EndIf}
+  CreateShortcut "$SMPROGRAMS\OMEGA\Detener OMEGA.lnk" "$INSTDIR\runtime\omega-oculto.exe" '--disable-warning=ExperimentalWarning "$INSTDIR\app\lanzador.js" --detener' "C:\OMEGA\omega.ico" 0 SW_SHOWNORMAL
   CreateShortcut "$SMPROGRAMS\OMEGA\Leeme.lnk" "$INSTDIR\LEEME.txt"
   CreateShortcut "$SMPROGRAMS\OMEGA\Carpeta de datos.lnk" "C:\OMEGA"
   CreateShortcut "$SMPROGRAMS\OMEGA\Desinstalar OMEGA.lnk" "$INSTDIR\desinstalar.exe"
@@ -234,6 +267,7 @@ Section "OMEGA (obligatorio)" SecBase
   WriteRegStr HKLM "Software\OMEGA" "Carpeta" "$INSTDIR"
   WriteRegStr HKLM "Software\OMEGA" "Version" "${VERSION_NOMBRE}"
   WriteRegStr HKLM "Software\OMEGA" "Arquitectura" "$ArqSel"
+  WriteRegStr HKLM "Software\OMEGA" "Escritorio" "$Escritorio"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\OMEGA" "DisplayName" "OMEGA - ${VERSION_NOMBRE}"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\OMEGA" "DisplayVersion" "${VERSION_NOMBRE}"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\OMEGA" "Publisher" "Gimnasio OMEGA"
@@ -244,11 +278,12 @@ SectionEnd
 
 Section "Iniciar el servidor al encender Windows" SecAuto
   SetShellVarContext all
-  CreateShortcut "$SMSTARTUP\OMEGA servidor.lnk" "$INSTDIR\runtime\omega-node.exe" '--disable-warning=ExperimentalWarning "$INSTDIR\app\lanzador.js" --silencioso' "C:\OMEGA\omega.ico" 0 SW_SHOWMINIMIZED
+  CreateShortcut "$SMSTARTUP\OMEGA servidor.lnk" "$INSTDIR\runtime\omega-oculto.exe" '--disable-warning=ExperimentalWarning "$INSTDIR\app\lanzador.js" --silencioso' "C:\OMEGA\omega.ico" 0 SW_SHOWNORMAL
 SectionEnd
 
 Section /o "Permitir el acceso desde los celulares del gimnasio (firewall)" SecFw
   nsExec::Exec 'netsh advfirewall firewall delete rule name="OMEGA"'
+  nsExec::Exec 'netsh advfirewall firewall add rule name="OMEGA" dir=in action=allow program="$INSTDIR\runtime\omega-oculto.exe" enable=yes profile=private,domain'
   nsExec::Exec 'netsh advfirewall firewall add rule name="OMEGA" dir=in action=allow program="$INSTDIR\runtime\omega-node.exe" enable=yes profile=private,domain'
 SectionEnd
 
@@ -263,6 +298,7 @@ LangString DESC_Fw ${LANG_SPANISH} "Opcional. Si no la marcás, Windows te va a 
 
 Section "Uninstall"
   SetShellVarContext all
+  nsExec::Exec 'taskkill /IM OMEGA.exe /F'
   ${If} ${FileExists} "$INSTDIR\app\lanzador.js"
     nsExec::Exec '"$INSTDIR\runtime\omega-node.exe" "$INSTDIR\app\lanzador.js" --detener'
     Sleep 1500

@@ -185,6 +185,7 @@ function seed() {
     tx(() => {
       ['Endurance', 'Flex', 'Funcional', 'Hiitcross', 'QDX', 'Z7'].forEach((n, i) =>
         run('INSERT INTO formatos (nombre, trabajo_seg, descanso_seg, color, orden) VALUES (?,NULL,NULL,?,?)', n, colores[i], i + 1));
+      try { run("UPDATE formatos SET rondas = 2 WHERE nombre IN ('Flex', 'Z7')"); } catch (_) { /* la columna la crea la migración */ }
     });
   }
   if (!get('SELECT 1 AS x FROM agenda LIMIT 1')) {
