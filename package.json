@@ -1,0 +1,16 @@
+{
+  "name": "omega-app",
+  "version": "1.0.0",
+  "description": "OMEGA - Sistema de gestión para gimnasio (5 módulos, PWA web/Android/iOS)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server.js",
+    "test": "node --disable-warning=ExperimentalWarning test/smoke.js",
+    "restaurar": "node --disable-warning=ExperimentalWarning scripts/restaurar.js"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}

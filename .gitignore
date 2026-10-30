@@ -1,0 +1,25 @@
+# Datos del gimnasio y copias: NUNCA al repositorio
+data/
+backups/
+uploads/
+*.db
+*.db-wal
+*.db-shm
+
+# Claves y configuración local
+.env
+.env.*
+!.env.example
+nube.txt
+*.key
+*.pem
+
+# Archivos generados (el instalador lleva la clave de la nube adentro)
+dist/
+installer/stage/
+*.exe
+*.zip
+
+# Otros
+node_modules/
+.DS_Store

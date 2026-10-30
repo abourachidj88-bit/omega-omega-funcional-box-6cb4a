@@ -1,0 +1,12 @@
+OMEGA - Sistema de gestión del gimnasio
+
+Abrir:        icono OMEGA del escritorio (primera pantalla: ingreso de Administrador o Profesor).
+              Se abre una ventana negra minimizada "OMEGA servidor": ES el servidor. No la cierres (para apagarlo usá "Detener OMEGA").
+Datos:        C:\OMEGA\datos          (base de datos y videos; nunca se borran al actualizar o desinstalar)
+Copias:       ver C:\OMEGA\config.txt (BACKUP_DIR). Automáticas todos los días a las 22:00.
+Celulares:    misma WiFi -> http://IP-DE-ESTA-PC:3000  (IP con el comando ipconfig)
+Detener:      "Detener OMEGA" en el menú Inicio.
+Restaurar:    arrastrar un archivo omega-....db sobre "restaurar-copia.bat" (en la carpeta de instalación).
+Registro:     C:\OMEGA\omega.log
+Aplicación web: dentro de OMEGA, botón "Sincronizar" (pide la dirección web y la clave que te da quien dio de alta tu gimnasio). También se puede completar C:\OMEGA\nube.txt a mano.
+Antivirus:    si tu antivirus avisa, ver la sección "Antivirus y Windows SmartScreen" de GUIA-OMEGA.md.

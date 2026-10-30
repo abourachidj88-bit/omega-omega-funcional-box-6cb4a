@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: omega-gimnasio
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/estado
+    envVars:
+      - key: OMEGA_NODO
+        value: nube
+      - key: SYNC_CLAVE
+        generateValue: true
