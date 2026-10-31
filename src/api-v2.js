@@ -238,19 +238,55 @@ function registrar(c) {
       return { ejercicio_id: ej.id, zona: ej.zona, series, repeticiones: str(x.repeticiones, 20) || '10', peso: str(x.peso, 20), descanso_seg: desc, seg_serie: seg };
     });
   };
-  const guardarRutina = (id, b) => {
+  // Una rutina la puede modificar solo quien la creó (el administrador también). Las anteriores a la Versión 8 no tienen creador: las modifica el administrador.
+  const puedeEditar = (r, user) => user.rol === 'admin' || (r.creador_id && r.creador_id === user.id);
+  const exigirCreador = (id, user) => {
+    const r = get('SELECT * FROM rutinas WHERE id = ? AND activo = 1', id); if (!r) throw new HttpError(404, 'Rutina no encontrada');
+    if (!puedeEditar(r, user)) throw new HttpError(403, 'Solo el profesor que creó esta rutina puede modificarla. Podés duplicarla y editar tu copia.');
+    return r;
+  };
+  const guardarRutina = (id, b, user) => {
     const nombre = str(b.nombre, 80); if (!nombre) throw bad('Escribí el nombre de la rutina');
+    const dueno = id ? (get('SELECT creador_id FROM rutinas WHERE id = ?', id) || {}).creador_id : user.id;
+    if (get('SELECT 1 AS x FROM rutinas WHERE activo = 1 AND lower(nombre) = lower(?) AND COALESCE(creador_id, 0) = ? AND id <> ?', nombre, dueno || 0, id || 0)) throw bad('Ya tenés una rutina con ese nombre. Usá otro nombre (las de otros profesores quedan aparte).');
     const items = itemsDe(b);
     const dur = duracionItems(items);
     if (dur > MAX_RUTINA_MIN) throw bad('La rutina dura ' + dur + ' minutos y el máximo es ' + MAX_RUTINA_MIN + '. Sacá ejercicios, series o descansos.');
     return tx(() => {
       if (id) { run('UPDATE rutinas SET nombre = ?, descripcion = ?, duracion_min = ? WHERE id = ?', nombre, str(b.descripcion, 300) || null, dur, id); run('DELETE FROM rutina_items WHERE rutina_id = ?', id); }
-      else id = Number(run('INSERT INTO rutinas (nombre, descripcion, duracion_min, creado) VALUES (?,?,?,?)', nombre, str(b.descripcion, 300) || null, dur, new Date().toISOString()).lastInsertRowid);
+      else id = Number(run('INSERT INTO rutinas (nombre, descripcion, duracion_min, creado, creador_id) VALUES (?,?,?,?,?)', nombre, str(b.descripcion, 300) || null, dur, new Date().toISOString(), user.id).lastInsertRowid);
       items.forEach((x, i) => run('INSERT INTO rutina_items (rutina_id, orden, ejercicio_id, zona, series, repeticiones, peso, descanso_seg, seg_serie) VALUES (?,?,?,?,?,?,?,?,?)', id, i + 1, x.ejercicio_id, x.zona, x.series, x.repeticiones, x.peso, x.descanso_seg, x.seg_serie));
       return { id, duracion_min: dur };
     });
   };
-  route('GET', '/api/rutinas', STAFF, () => all('SELECT r.*, (SELECT COUNT(*) FROM rutina_items i WHERE i.rutina_id = r.id) AS ejercicios FROM rutinas r WHERE r.activo = 1 ORDER BY r.nombre COLLATE NOCASE'));
+  route('GET', '/api/rutinas', STAFF, ({ user }) => all('SELECT r.*, u.nombre AS creador, (SELECT COUNT(*) FROM rutina_items i WHERE i.rutina_id = r.id) AS ejercicios FROM rutinas r LEFT JOIN usuarios u ON u.id = r.creador_id WHERE r.activo = 1 ORDER BY r.nombre COLLATE NOCASE').map(r => ({ ...r, editable: puedeEditar(r, user) })));
+  // Biblioteca: rutinas agrupadas por el profesor que las creó, con los alumnos que las tienen asignadas. De uso libre para cualquier profesor.
+  route('GET', '/api/rutinas/biblioteca', STAFF, ({ user }) => {
+    const rs = all(`SELECT r.id, r.nombre, r.descripcion, r.duracion_min, r.creador_id, COALESCE(u.nombre, 'Rutinas anteriores (sin profesor)') AS profesor,
+      (SELECT COUNT(*) FROM rutina_items i WHERE i.rutina_id = r.id) AS ejercicios FROM rutinas r LEFT JOIN usuarios u ON u.id = r.creador_id WHERE r.activo = 1 ORDER BY (r.creador_id IS NULL), profesor COLLATE NOCASE, r.nombre COLLATE NOCASE`);
+    const asig = all('SELECT rc.rutina_id, rc.cliente_id, rc.dias, c.nombre AS cliente FROM rutina_clientes rc JOIN clientes c ON c.id = rc.cliente_id ORDER BY c.nombre COLLATE NOCASE');
+    const grupos = new Map();
+    for (const r of rs) {
+      const k = r.creador_id || 0;
+      if (!grupos.has(k)) grupos.set(k, { profesor_id: r.creador_id, profesor: r.profesor, propio: r.creador_id === user.id, rutinas: [] });
+      grupos.get(k).rutinas.push({ ...r, editable: puedeEditar(r, user), asignados: asig.filter(a => a.rutina_id === r.id).map(a => ({ cliente_id: a.cliente_id, cliente: a.cliente, dias_txt: String(a.dias).split(',').map(d => DIAS_TXT[Number(d)]).join(', ') })) });
+    }
+    return [...grupos.values()].sort((a, z) => (z.propio - a.propio));
+  });
+  // Vista por cliente: cada cliente con todas sus rutinas asignadas
+  route('GET', '/api/rutinas/por-cliente', STAFF, () => {
+    const filas = all(asignacionesSql + ' ORDER BY c.nombre COLLATE NOCASE, r.nombre COLLATE NOCASE').map(conDias);
+    const m = new Map();
+    for (const f of filas) { if (!m.has(f.cliente_id)) m.set(f.cliente_id, { cliente_id: f.cliente_id, cliente: f.cliente, rutinas: [] }); m.get(f.cliente_id).rutinas.push(f); }
+    return [...m.values()];
+  });
+  // Duplicar una rutina de la biblioteca como propia (para adaptarla a otro alumno sin tocar la original)
+  route('POST', '/api/rutinas/:id/duplicar', STAFF, ({ params, user }) => {
+    const o = rutinaCompleta(Number(params.id)); if (!o) throw new HttpError(404, 'Rutina no encontrada');
+    let nombre = o.nombre, n = 1;
+    while (get('SELECT 1 AS x FROM rutinas WHERE activo = 1 AND lower(nombre) = lower(?) AND COALESCE(creador_id, 0) = ?', nombre, user.id)) { n++; nombre = o.nombre + ' (copia' + (n > 2 ? ' ' + (n - 1) : '') + ')'; }
+    return guardarRutina(null, { nombre, descripcion: o.descripcion, items: o.items }, user);
+  });
   const DIAS_TXT = ['', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
   const asignacionesSql = `SELECT rc.id, rc.rutina_id, rc.cliente_id, rc.dias, rc.profesor_id, up.nombre AS profesor, r.nombre AS rutina, r.duracion_min, c.nombre AS cliente
     FROM rutina_clientes rc LEFT JOIN usuarios up ON up.id = rc.profesor_id JOIN rutinas r ON r.id = rc.rutina_id AND r.activo = 1 JOIN clientes c ON c.id = rc.cliente_id`;
@@ -281,16 +317,27 @@ function registrar(c) {
     return all('SELECT d.id, d.fecha, d.formato_id, d.rutina_id, r.nombre AS rutina FROM rutina_dia d JOIN rutinas r ON r.id = d.rutina_id WHERE d.fecha BETWEEN ? AND ? ORDER BY d.fecha', desde, addDays(desde, 13));
   });
   route('GET', '/api/rutinas/:id', STAFF, ({ params }) => { const r = rutinaCompleta(Number(params.id)); if (!r) throw new HttpError(404, 'Rutina no encontrada'); return r; });
-  route('POST', '/api/rutinas', STAFF, async ({ req }) => guardarRutina(null, await readBody(req)));
-  route('PUT', '/api/rutinas/:id', STAFF, async ({ req, params }) => {
-    if (!get('SELECT 1 AS x FROM rutinas WHERE id = ?', Number(params.id))) throw new HttpError(404, 'Rutina no encontrada');
-    return guardarRutina(Number(params.id), await readBody(req));
+  route('POST', '/api/rutinas', STAFF, async ({ req, user }) => guardarRutina(null, await readBody(req), user));
+  route('PUT', '/api/rutinas/:id', STAFF, async ({ req, params, user }) => {
+    exigirCreador(Number(params.id), user);
+    return guardarRutina(Number(params.id), await readBody(req), user);
   });
-  route('DELETE', '/api/rutinas/:id', STAFF, ({ params }) => {
-    const id = Number(params.id);
-    tx(() => { run('UPDATE rutinas SET activo = 0 WHERE id = ?', id); run('DELETE FROM rutina_dia WHERE rutina_id = ?', id); run('DELETE FROM rutina_clientes WHERE rutina_id = ?', id); });
+  // Las rutinas no se eliminan: se inhabilitan (dejan de verse y de usarse) y se pueden activar de nuevo. Las asignaciones a alumnos se conservan.
+  route('POST', '/api/rutinas/:id/inhabilitar', STAFF, ({ params, user }) => {
+    const id = Number(params.id); exigirCreador(id, user);
+    tx(() => { run('UPDATE rutinas SET activo = 0 WHERE id = ?', id); run('DELETE FROM rutina_dia WHERE rutina_id = ?', id); });
     return { ok: true };
   });
+  route('POST', '/api/rutinas/:id/habilitar', STAFF, ({ params, user }) => {
+    const r = get('SELECT * FROM rutinas WHERE id = ? AND activo = 0', Number(params.id)); if (!r) throw new HttpError(404, 'Rutina no encontrada');
+    if (!puedeEditar(r, user)) throw new HttpError(403, 'Solo el profesor que creó esta rutina puede volver a activarla.');
+    if (get('SELECT 1 AS x FROM rutinas WHERE activo = 1 AND lower(nombre) = lower(?) AND COALESCE(creador_id, 0) = ?', r.nombre, r.creador_id || 0)) throw bad('Ya hay una rutina activa con ese nombre. Cambiale el nombre a una de las dos.');
+    run('UPDATE rutinas SET activo = 1 WHERE id = ?', r.id);
+    return { ok: true };
+  });
+  route('GET', '/api/rutinas-inhabilitadas', STAFF, ({ user }) => all(`SELECT r.id, r.nombre, r.descripcion, r.duracion_min, r.creador_id, COALESCE(u.nombre, 'Rutinas anteriores (sin profesor)') AS profesor,
+      (SELECT COUNT(*) FROM rutina_items i WHERE i.rutina_id = r.id) AS ejercicios, (SELECT COUNT(*) FROM rutina_clientes rc WHERE rc.rutina_id = r.id) AS alumnos
+      FROM rutinas r LEFT JOIN usuarios u ON u.id = r.creador_id WHERE r.activo = 0 ORDER BY profesor COLLATE NOCASE, r.nombre COLLATE NOCASE`).map(r => ({ ...r, editable: puedeEditar(r, user) })));
   // asigna una rutina a un día (a la pestaña de un formato, o "Rutina" si formato_id = 0)
   route('PUT', '/api/rutinas-dia', STAFF, async ({ req }) => {
     const b = await readBody(req);

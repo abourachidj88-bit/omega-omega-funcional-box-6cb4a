@@ -33,6 +33,18 @@ async function verPosiciones(e, eq) {
   return m;
 }
 
+// Ficha completa del ejercicio: posiciones, progresiones, datos y video
+async function verEjercicio(e, eq) {
+  let full = e;
+  try { full = await api('GET', '/ejercicios/' + e.id); } catch (_) {}
+  const nom = eq ? eqNombre(eq, full.equipo) : '';
+  const m = modal(full.nombre, `<p class="small muted">${esc(full.zona || '')}${nom && full.equipo !== 'ninguno' ? ' · ' + esc(nom) : ''}${full.intensidad ? ' · Intensidad ' + esc(full.intensidad) : ''}</p>${Ilustra.tira(full.patron || 'sentadilla', full.equipo, [full.img1, full.img2, full.img3], nom)}
+    <div class="small" style="margin-top:8px"><b>Capacidades:</b> ${esc(String(full.capacidad || '—').split(',').join(', '))}<br><b>Sistema energético:</b> ${esc(String(full.energia || '—').split(',').join(', '))}${full.prog2 ? `<br><b>Progresión 1:</b> ${esc(full.prog2)}<br><b>Progresión 2:</b> ${esc(full.prog3)}` : ''}</div>
+    ${full.video ? `<video src="${esc(urlVideo(full.video))}" controls playsinline style="width:100%;border-radius:12px;background:#000;max-height:50vh;margin-top:10px"></video>` : '<p class="small muted" style="margin-top:10px">Este ejercicio todavía no tiene video.</p>'}
+    <div class="row" style="justify-content:flex-end;margin-top:10px"><button data-close>Cerrar</button></div>`, { wide: true });
+  return m;
+}
+
 function tabsPlan(activa) {
   const t = [['/planificacion', 'Agenda semanal', 'plan.semana'], ['/planificacion/staff', 'Agenda Staff', 'plan.staff'], ['/planificacion/formatos', 'Formatos e Intervalos', 'plan.semana'], ['/planificacion/semana', 'Planificación Semanal', 'plan.semana'], ['/planificacion/rutinas', 'Rutinas Personalizadas', 'plan.rutinas'], ['/planificacion/biblioteca', 'Biblioteca', 'plan.biblioteca'], ['/planificacion/equipos', 'Equipamiento', 'plan.config']].filter(x => puede(x[2]));
   return `<div class="tabs">${t.map(([h, n]) => `<button onclick="ir('#${h}')" class="${h === activa ? 'on' : ''}">${n}</button>`).join('')}</div>`;
@@ -349,8 +361,8 @@ vista('/planificacion/biblioteca', ['admin', 'profesor'], async (main) => {
       <div class="tabs">${subitems(grupo).map(o => `<button data-z="${o.clave}" class="${o.clave === clave ? 'on' : ''}">${esc(o.nombre)} <span class="pill">${o.n}</span></button>`).join('')}</div>
       ${sel.ejemplo ? `<div class="infobox" style="margin-bottom:10px"><b>${esc(sel.nombre)}:</b> ${esc(sel.ejemplo)}</div>` : ''}
       <div class="row" style="margin-bottom:10px"><input id="q" type="search" placeholder="Buscar en ${esc(sel.nombre)}…" value="${esc(buscar)}" style="max-width:320px"><span class="small muted">${z.length} ejercicios</span></div>
-      <div class="tablewrap hbar" tabindex="0"><table style="min-width:980px"><thead><tr><th>Base</th><th>Progresión 1</th><th>Progresión 2</th><th>Patrón</th><th>Capacidades · energía</th><th>Equipo</th><th>Intensidad</th><th>Posiciones</th><th>Video</th><th></th></tr></thead><tbody>
-      ${z.map(e => `<tr style="cursor:default"><td><b>${esc(e.nombre)}</b>${e.origen === 'propio' ? ' <span class="pill">propio</span>' : e.origen === 'sugerido' ? ' <span class="pill">IA</span>' : ''}</td><td>${esc(e.prog2)}</td><td>${esc(e.prog3)}</td><td class="small">${esc(e.zona)}</td>
+      <div class="tablewrap hbar" id="tw-ej" tabindex="0"><table class="tabla-ej" style="min-width:900px"><thead><tr><th>Base</th><th>Progresión 1</th><th>Progresión 2</th><th>Patrón</th><th>Capacidades · energía</th><th>Equipo</th><th>Intensidad</th><th>Posiciones</th><th>Video</th><th></th></tr></thead><tbody>
+      ${z.map(e => `<tr style="cursor:default"><td class="celda-base"><button type="button" class="lnk-ej" data-ej="${e.id}" title="Ver el ejercicio">${esc(e.nombre)}</button>${e.origen === 'propio' ? ' <span class="pill">propio</span>' : e.origen === 'sugerido' ? ' <span class="pill">IA</span>' : ''}</td><td class="prog">${esc(e.prog2)}</td><td class="prog">${esc(e.prog3)}</td><td class="small">${esc(e.zona)}</td>
         <td class="small">${cl(e, 'capacidad').map(k => esc(nombreDe('capacidades', k))).join(', ') || '—'}<br><span class="muted">${cl(e, 'energia').map(k => esc(nombreDe('energias', k))).join(', ') || '—'}</span></td>
         <td>${esc(eqNombre(eq, e.equipo))}</td><td>${e.intensidad ? `<span class="pill ${e.intensidad === 'alta' ? 'rojo' : e.intensidad === 'moderada' ? 'amarillo' : ''}">${{ baja: 'Baja', moderada: 'Moderada', alta: 'Alta' }[e.intensidad]}</span>` : '—'}</td>
         <td><button class="sm" data-pos="${e.id}">▣ Ver 3 posiciones</button></td>
@@ -362,6 +374,8 @@ vista('/planificacion/biblioteca', ['admin', 'profesor'], async (main) => {
     const q = $('#q', main); q.oninput = debounce(() => { buscar = q.value; pintar(); const n = $('#q', main); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 250);
     const bnuevo = $('#nuevo', main); if (bnuevo) bnuevo.onclick = () => formEjercicio(null, eq, grupo === 'patrones' ? sel.nombre : ZONAS_UI[0], recargar);
     $$('[data-ed]', main).forEach(b => b.onclick = () => formEjercicio(lista.find(e => e.id === Number(b.dataset.ed)), eq, null, recargar));
+    barraArriba($('#tw-ej', main));
+    $$('[data-ej]', main).forEach(b => b.onclick = () => verEjercicio(lista.find(e => e.id === Number(b.dataset.ej)), eq));
     $$('[data-pos]', main).forEach(b => b.onclick = () => verPosiciones(lista.find(e => e.id === Number(b.dataset.pos)), eq));
     $$('[data-ver]', main).forEach(b => b.onclick = () => verVideo(lista.find(e => e.id === Number(b.dataset.ver)), recargar));
     $$('[data-vid]', main).forEach(i => i.onchange = () => subirConProgreso(Number(i.dataset.vid), i.files[0], recargar));
@@ -460,7 +474,7 @@ function vistaCircuito(c, eq, clases, editable) {
   const stock = new Map(eq.map(e => [e.clave, e]));
   const slots = c.rondas[0].ejercicios.map((_, i) => i);
   return `
-    <div class="page-title"><a class="btn ghost sm" href="#/planificacion">← Semana</a><h1>${fmtFlargo(c.fecha)}</h1>${chipFormato({ nombre: c.formato, color: c.color })}
+    <div class="page-title"><h1>${fmtFlargo(c.fecha)}</h1>${chipFormato({ nombre: c.formato, color: c.color })}
       <div class="actions"><button id="b-play" class="primary">Cronómetro de la clase</button><button id="b-list">Lista de videos</button></div></div>
     <div class="row small muted" style="margin-bottom:10px"><span>Horarios: <b>${clases.map(x => hh(x.hora)).join(' · ') || '—'}</b></span><span>·</span><span>${c.sin_trabajo ? 'Clase corrida, sin intervalos' : 'Trabajo ' + seg(c.trabajo_seg) + (c.sin_descanso ? ' · sin descanso' : ' / descanso ' + seg(c.descanso_seg))}</span><span>·</span><span>Duración ≈ ${c.duracion_min} min</span><span>·</span><span>${c.estaciones} estaciones · ${c.personas_por_estacion} personas por estación</span></div>
     ${c.advertencias.map(a => `<div class="warnbox" style="margin-bottom:8px">⚠ ${esc(a)}</div>`).join('')}

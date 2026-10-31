@@ -428,7 +428,6 @@ route('GET', '/api/clientes', STAFF, ({ user }) => listaClientes(user));
 route('GET', '/api/clientes/:id', STAFF, ({ params, user }) => detalleCliente(Number(params.id), user));
 route('POST', '/api/clientes', STAFF, async ({ req, user }) => crearCliente(await readBody(req), user));
 route('PUT', '/api/clientes/:id', STAFF, async ({ req, params, user }) => { actualizarCliente(Number(params.id), await readBody(req), user); return { ok: true }; });
-route('DELETE', '/api/clientes/:id', ADM, ({ params }) => { run('DELETE FROM usuarios WHERE cliente_id = ?', Number(params.id)); run('DELETE FROM clientes WHERE id = ?', Number(params.id)); return { ok: true }; });
 route('POST', '/api/clientes/:id/renovar', STAFF, async ({ req, params }) => renovarCliente(Number(params.id), await readBody(req)));
 route('POST', '/api/clientes/:id/acceso', STAFF, ({ params }) => {
   const id = Number(params.id);
@@ -790,6 +789,7 @@ v2.registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str, num
 require('./api-v4').registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str });
 require('./api-v6').registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str });
 require('./api-v7').registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str });
+require('./api-v8').registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str });
 require('./api-v4').registrarV5({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str });
 require('./api-v3').registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str, num, requireFecha, fechaOpc, soloDigitos, normTel, claseAhora, registrarAsistencia, semaforoAlta, horasDeAgenda, asegurarSesion });
 // ------------------------------------------------------------ despacho

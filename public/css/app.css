@@ -318,3 +318,17 @@ body.con-foto .auth { background: transparent; }
 #c-fondo, #c-txt, #c-btn { width: 54px; height: 38px; padding: 2px; flex: 0 0 auto; }
 @media (max-width: 520px) { .top { gap: 6px; padding-left: 10px; padding-right: 10px; } .who { gap: 6px; min-width: 0; } .who .nom, .who > span:not(.rol) { max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
 @media (max-width: 520px) { .top .logo { min-width: 0; font-size: 1.05rem; letter-spacing: .06em; gap: 4px; flex: 0 1 auto; overflow: hidden; } .logo-edit { margin-left: 2px; padding: 2px 5px; } }
+
+.backbar { max-width: 1180px; margin: 10px auto 0; padding: 0 16px; }
+@media (min-width: 900px) { .backbar { padding: 0 24px; } }
+.backbar .btn { text-decoration: none; }
+
+.top-scroll { overflow-x: auto; overflow-y: hidden; height: 14px; margin-bottom: 2px; }
+.top-scroll > div { height: 1px; }
+.celda-base { min-width: 150px; max-width: 210px; white-space: normal; line-height: 1.25; }
+.celda-base .lnk-ej { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--brand2, var(--link, #0a6)); text-align: left; cursor: pointer; text-decoration: underline; }
+.tabla-ej td, .tabla-ej th { padding: 6px 8px; }
+.tabla-ej td.prog { min-width: 130px; max-width: 190px; white-space: normal; line-height: 1.25; }
+.top-scroll { overflow-x: scroll; scrollbar-width: auto; height: 16px; }
+.top-scroll::-webkit-scrollbar { height: 14px; }
+.top-scroll::-webkit-scrollbar-thumb { background: #888; border-radius: 7px; }

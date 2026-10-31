@@ -82,6 +82,7 @@ function shell(rol, ruta, contenidoHtml) {
     <header class="top"><div class="logo">${logoHtml(false)}${rol === 'admin' ? '<button class="logo-edit" id="btn-logo" title="Cambiar logo, nombre y tipografía" aria-label="Cambiar logo">✎</button>' : ''}${rol === 'admin' || (rol === 'profesor' && puede('cfg.diseno')) ? '<button class="logo-edit" id="btn-diseno" title="Colores, fondo y letras" aria-label="Diseño">🎨</button>' : ''}</div>
       <div class="who"><span class="rol">${rolTxt}</span><span class="hide-sm">${esc(S.user.nombre || S.user.username)}</span>${rol === 'cliente' ? '' : ''}${rol !== 'cliente' ? `<button class="campana" id="btn-notif" title="Avisos" aria-label="Avisos">🔔<span class="badge">0</span></button>` : ''}<button class="ghost sm" id="btn-salir">Salir</button></div></header>
     ${nav ? `<nav class="nav">${nav}</nav>` : ''}
+${HIST.length > 1 && HIST[HIST.length - 1] === ruta ? '<div class="backbar"><a class="btn ghost sm" id="btn-volver" href="#' + esc(HIST[HIST.length - 2]) + '">← Volver</a></div>' : ''}
     <main id="main">${contenidoHtml || ''}</main>${bnav}</div>`;
   const bn = $('#btn-notif'); if (bn) { bn.onclick = abrirNotificaciones; actualizarCampana(); }
   const bl = $('#btn-logo'); if (bl) bl.onclick = editarMarca;

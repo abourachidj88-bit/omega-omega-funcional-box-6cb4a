@@ -34,12 +34,6 @@ vista('/finanzas/mes', ['admin', 'profesor'], async (main) => {
           ${f.punto_equilibrio_alumnos ? `<div class="meter"><i style="width:${pct}%"></i></div><div class="small ${faltan ? 't-amarillo' : 't-verde'}" style="margin-top:6px">${faltan ? 'Faltan ' + faltan + ' alumnos para cubrir los gastos.' : 'Con los alumnos activos ya se cubren los gastos.'}</div>` : '<div class="small muted">Cargá egresos y precios de plan para calcularlo.</div>'}</div>
         <div class="card"><h3>Egresos por categoría</h3>${Object.keys(f.por_categoria).length ? Object.entries(f.por_categoria).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div style="margin-bottom:8px"><div class="row between small"><span>${esc(k)}</span><b>${money(v)}</b></div><div class="meter"><i style="width:${Math.round(100 * v / totCat)}%"></i></div></div>`).join('') : '<div class="empty">Todavía no cargaste egresos este mes.</div>'}</div></div>
       <div class="grid c2" style="margin-top:14px">
-        <div class="card" id="planes"><h3>Precios de los planes</h3>
-          <p class="small muted">Precio vigente de cada plan según cómo paga el alumno. Al renovar se usa el precio del medio de pago elegido.</p>
-          ${an.planes.map(p => `<div class="plan-fila" data-id="${p.id}" style="${p.activo ? '' : 'opacity:.6'}"><div class="grow"><b>${esc(p.nombre)}</b>${p.activo ? '' : ' <span class="pill">Deshabilitado</span>'}<div class="small muted">${p.alumnos} alumnos</div></div>
-            <label class="small">Efectivo<input type="number" min="0" step="100" data-k="precio_efectivo" value="${p.precio_efectivo}"></label><label class="small">Mercado Pago<input type="number" min="0" step="100" data-k="precio_mp" value="${p.precio_mp}"></label>
-            <button class="primary sm" data-sv>Guardar</button><button class="${p.activo ? 'danger' : ''} sm" data-tg="${p.activo ? 0 : 1}" title="${p.activo ? 'Ya no se ofrece: deja de aparecer al renovar o dar de alta, pero conserva su historial' : 'Vuelve a ofrecerse'}">${p.activo ? 'Deshabilitar' : 'Habilitar'}</button></div>`).join('') || '<div class="empty">Todavía no hay planes.</div>'}
-          <button class="ghost sm" id="p-nuevo" style="margin-top:8px">＋ Nuevo plan</button></div>
         <div class="card"><h3>Qué paga cada alumno activo</h3>
           ${an.tickets.alumnos ? `<div class="row between"><span>Precio promedio pagado</span><b style="font-size:1.4rem">${money(an.tickets.precio_promedio)}</b></div>
           <div class="small muted" style="margin-bottom:8px">${an.tickets.alumnos} alumnos activos con pago${an.tickets.precio_vigente_max ? ` · precio de lista más alto: ${money(an.tickets.precio_vigente_max)}` : ''}${an.tickets.bajo_vigente ? ` · <span class="t-amarillo">${an.tickets.bajo_vigente} pagan menos (planes antiguos)</span>` : ''}</div>
@@ -61,21 +55,6 @@ vista('/finanzas/mes', ['admin', 'profesor'], async (main) => {
       gan: () => listaModal('Movimientos de ' + nombreMes(mes), ['Fecha', 'Tipo', 'Concepto', 'Monto'], f.movimientos.map(x => [fmtF(x.fecha), x.tipo === 'ingreso' ? 'Ingreso' : 'Egreso', x.concepto || x.categoria || '', money(x.monto)])),
     });
     const set = (m) => { mes = m; cargar().catch(fail); };
-    $$('#planes [data-sv]', main).forEach(b => b.onclick = async () => {
-      const fila = b.closest('.plan-fila'); const body = {}; $$('input[data-k]', fila).forEach(i => { body[i.dataset.k] = i.value; });
-      const aplicar = await confirmar('¿Querés que el nuevo precio en efectivo también quede en la ficha de los alumnos de este plan?', 'Sí, actualizar fichas');
-      body.aplicar_a_alumnos = aplicar;
-      try { await api('PUT', '/planes/' + fila.dataset.id, body); toast('Precios guardados'); cargar(); } catch (e) { fail(e); }
-    });
-    $$('#planes [data-tg]', main).forEach(b => b.onclick = async () => {
-      const fila = b.closest('.plan-fila'), deshab = b.dataset.tg === '0';
-      if (deshab && !(await confirmar('¿Deshabilitar este plan? Deja de ofrecerse al renovar o dar de alta alumnos; los alumnos y pagos que lo usaron en el pasado se conservan. Podés volver a habilitarlo cuando quieras.', 'Deshabilitar', true))) return;
-      try { await api('PUT', '/planes/' + fila.dataset.id, { activo: !deshab }); toast(deshab ? 'Plan deshabilitado' : 'Plan habilitado'); cargar(); } catch (e) { fail(e); }
-    });
-    $('#p-nuevo', main).onclick = () => {
-      const m = modal('Nuevo plan', `<form id="fp" class="stack">${campo('Nombre', '<input name="nombre" required placeholder="Ej.: Plan trimestral">')}<div class="fgrid">${campo('Precio efectivo ($)', '<input name="precio_efectivo" type="number" min="0" required>')}${campo('Precio Mercado Pago ($)', '<input name="precio_mp" type="number" min="0" required>')}</div><div class="row" style="justify-content:flex-end"><button type="button" data-close>Cancelar</button><button class="primary">Crear</button></div></form>`);
-      $('#fp', m).onsubmit = async (e) => { e.preventDefault(); try { await api('POST', '/planes', Object.fromEntries(new FormData(e.target))); m.close(); cargar(); } catch (er) { fail(er); } };
-    };
     $('#mes', main).onchange = (e) => e.target.value && set(e.target.value);
     $('#ant', main).onclick = () => set(mesMas(mes, -1)); $('#sig', main).onclick = () => set(mesMas(mes, 1));
     $('#b-egr', main).onclick = () => formMovimiento('egreso', cargar);
@@ -135,6 +114,41 @@ function montarArbol(cont, arbol, sel, estandar, otros) {
   }
   pintar();
 }
+
+// ---------- Finanzas · Planes y descuentos (juntos) ----------
+vista('/finanzas/planes', ['admin', 'profesor'], async (main) => {
+  async function cargar() {
+    const planes = await api('GET', '/planes?todos=1');
+    main.innerHTML = `<div class="page-title"><h1>Finanzas</h1></div>${tabsFin('/finanzas/planes')}
+      <div class="infobox" style="margin-bottom:12px">Acá se definen los <b>planes</b> (precio “Plan Full”) y los <b>descuentos</b> que se pueden aplicar al renovar o dar como premio por recomendar.</div>
+      <div class="grid c2">
+        <div class="card" id="planes"><h3>Precios de los planes</h3>
+          <p class="small muted">Precio vigente de cada plan según cómo paga el alumno. Al renovar se usa el precio del medio de pago elegido.</p>
+          ${planes.map(p => `<div class="plan-fila" data-id="${p.id}" style="${p.activo ? '' : 'opacity:.6'}"><div class="grow"><b>${esc(p.nombre)}</b>${p.activo ? '' : ' <span class="pill">Deshabilitado</span>'}<div class="small muted">${p.alumnos} alumnos</div></div>
+            <label class="small">Efectivo<input type="number" min="0" step="100" data-k="precio_efectivo" value="${p.precio_efectivo}"></label><label class="small">Mercado Pago<input type="number" min="0" step="100" data-k="precio_mp" value="${p.precio_mp}"></label>
+            <button class="primary sm" data-sv>Guardar</button><button class="${p.activo ? 'danger' : ''} sm" data-tg="${p.activo ? 0 : 1}" title="${p.activo ? 'Ya no se ofrece: deja de aparecer al renovar o dar de alta, pero conserva su historial' : 'Vuelve a ofrecerse'}">${p.activo ? 'Deshabilitar' : 'Habilitar'}</button></div>`).join('') || '<div class="empty">Todavía no hay planes.</div>'}
+          <button class="ghost sm" id="p-nuevo" style="margin-top:8px">＋ Nuevo plan</button></div>
+        <div class="card" id="desc"></div></div>`;
+    bloqueDescuentos($('#desc', main)).catch(fail);
+    $$('#planes [data-sv]', main).forEach(b => b.onclick = async () => {
+      const fila = b.closest('.plan-fila'); const body = {}; $$('input[data-k]', fila).forEach(i => { body[i.dataset.k] = i.value; });
+      const aplicar = await confirmar('¿Querés que el nuevo precio en efectivo también quede en la ficha de los alumnos de este plan?', 'Sí, actualizar fichas');
+      body.aplicar_a_alumnos = aplicar;
+      try { await api('PUT', '/planes/' + fila.dataset.id, body); toast('Precios guardados'); cargar(); } catch (e) { fail(e); }
+    });
+    $$('#planes [data-tg]', main).forEach(b => b.onclick = async () => {
+      const fila = b.closest('.plan-fila'), deshab = b.dataset.tg === '0';
+      if (deshab && !(await confirmar('¿Deshabilitar este plan? Deja de ofrecerse al renovar o dar de alta alumnos; los alumnos y pagos que lo usaron en el pasado se conservan. Podés volver a habilitarlo cuando quieras.', 'Deshabilitar', true))) return;
+      try { await api('PUT', '/planes/' + fila.dataset.id, { activo: !deshab }); toast(deshab ? 'Plan deshabilitado' : 'Plan habilitado'); cargar(); } catch (e) { fail(e); }
+    });
+    $('#p-nuevo', main).onclick = () => {
+      const m = modal('Nuevo plan', `<form id="fp" class="stack">${campo('Nombre', '<input name="nombre" required placeholder="Ej.: Plan trimestral">')}<div class="fgrid">${campo('Precio efectivo ($)', '<input name="precio_efectivo" type="number" min="0" required>')}${campo('Precio Mercado Pago ($)', '<input name="precio_mp" type="number" min="0" required>')}</div><div class="row" style="justify-content:flex-end"><button type="button" data-close>Cancelar</button><button class="primary">Crear</button></div></form>`);
+      $('#fp', m).onsubmit = async (e) => { e.preventDefault(); try { await api('POST', '/planes', Object.fromEntries(new FormData(e.target))); m.close(); cargar(); } catch (er) { fail(er); } };
+    };
+  }
+  await cargar();
+});
+
 vista('/usuarios', ['admin'], async (main) => {
   const [us, pm] = await Promise.all([api('GET', '/usuarios'), api('GET', '/permisos')]);
   const totalPerm = pm.arbol.reduce((a, m) => a + m.items.length, 0);
@@ -191,8 +205,8 @@ vista('/ajustes', ['admin'], async (main) => {
         <div class="small"><div>Carpeta: <b style="word-break:break-all">${esc(bk.carpeta)}</b></div>${bk.ultimo ? `<div style="margin-top:6px">Última copia: <b>${fmtF(bk.ultimo.fecha)} ${String(bk.ultimo.hora).padStart(2, '0')}:${String(bk.ultimo.min).padStart(2, '0')}</b> · ${esc(bk.ultimo.archivo)}${bk.ultimo.nube && bk.ultimo.nube.subido ? ' · subida a OneDrive ✓' : ''}</div>` : '<div class="t-amarillo" style="margin-top:6px">Todavía no se hizo ninguna copia.</div>'}</div>
         <div class="row" style="margin:12px 0"><button class="primary" id="bk-ya">Hacer una copia ahora</button></div>
         ${bk.archivos.length ? `<div class="small muted">Copias guardadas (${bk.archivos.length}):</div>${bk.archivos.slice(0, 8).map(a => `<div class="row between small"><span>${esc(a.archivo)}</span><span class="muted">${(a.bytes / 1048576).toFixed(2)} MB</span></div>`).join('')}` : ''}</div>
-      <div class="card" id="pais"></div><div class="card" id="desc"></div><div class="card" id="camp"></div><div id="sync"></div><div class="card" id="inst"></div><div class="card" id="clave"></div></div>`;
-  bloquePais($('#pais', main)).catch(fail); bloqueDescuentos($('#desc', main)).catch(fail); bloqueCampanas($('#camp', main)).catch(fail); barraSync($('#sync', main)); bloqueInstalar($('#inst', main)); formClave($('#clave', main));
+      <div class="card" id="pais"></div><div class="card" id="dep"></div><div class="card" id="camp"></div><div id="sync"></div><div class="card" id="inst"></div><div class="card" id="clave"></div></div>`;
+  bloquePais($('#pais', main)).catch(fail); bloqueDepurar($('#dep', main)).catch(fail); bloqueCampanas($('#camp', main)).catch(fail); barraSync($('#sync', main)); bloqueInstalar($('#inst', main)); formClave($('#clave', main));
   $('#bk-ya', main).onclick = async (e) => { e.target.disabled = true; try { const r = await api('POST', '/backups/ahora'); if (r.ok) { toast('Copia creada: ' + r.archivo); render(); } else fail(new Error(r.error)); } catch (er) { fail(er); } e.target.disabled = false; };
 });
 
@@ -226,4 +240,70 @@ async function bloqueMisSeguimientos(el) {
     ${d.leads.length ? d.leads.map(l => `<div class="list-item"><div class="grow"><b>${esc(l.nombre)}</b> <span class="small muted">· visitó el ${fmtF(l.fecha)}${l.objetivo ? ' · ' + esc(l.objetivo) : ''}</span>${l.ultimo_comentario ? `<div class="small">Último comentario (${fmtF(l.ultimo_comentario.fecha)}): ${esc(l.ultimo_comentario.texto)}</div>` : '<div class="small t-amarillo">Sin comentarios todavía</div>'}</div>${l.telefono ? botonWA(l.telefono, 'WhatsApp', 'sm') : ''}<a class="btn sm" href="#/crm/seguimiento">Abrir</a></div>`).join('') : '<div class="empty small">No tenés visitas para seguir.</div>'}
     <div class="small muted" style="margin:12px 0 4px">Alumnos con rutina personalizada a mi cargo (${d.rutinas.length})</div>
     ${d.rutinas.length ? `<div class="tablewrap"><table><thead><tr><th>Alumno</th><th>Rutina</th><th class="num">Veces que entrenó</th><th class="num">Veces que hizo la rutina</th><th>Última clase</th></tr></thead><tbody>${d.rutinas.map(r => `<tr style="cursor:default"><td><a href="#/clientes/${r.cliente_id}"><b>${esc(r.cliente)}</b></a></td><td>${esc(r.rutina)}<div class="small muted">desde ${fmtF(r.desde)}</div></td><td class="num">${r.entrenos}</td><td class="num"><b>${r.rutinas_realizadas}</b></td><td>${r.ultima_asistencia ? fmtF(r.ultima_asistencia) : '—'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty small">No tenés alumnos asignados en seguimiento.</div>'}`;
+}
+
+
+// ---------- Ajustes · Depurar la base (eliminar de verdad; solo administrador) ----------
+async function bloqueDepurar(el) {
+  let rama = 'clientes', filtro = '', estado = 'todos', meses = 12;
+  const sel = new Set();
+  const datos = {};
+  async function cargarRama() {
+    if (rama === 'clientes') datos.clientes = await api('GET', '/depurar/clientes');
+    else if (rama === 'perdidos') datos.perdidos = await api('GET', '/depurar/perdidos?meses=' + meses);
+    else datos.rutinas = await api('GET', '/depurar/rutinas');
+    pintar();
+  }
+  function pintar() {
+    let cuerpo = '';
+    if (rama === 'clientes') {
+      const l = (datos.clientes || []).filter(c => (estado === 'todos' || (estado === 'activos') === c.activo) && (!filtro || norm(c.nombre).includes(norm(filtro))));
+      cuerpo = `<p class="small muted">Los clientes normalmente <b>se inhabilitan, no se eliminan</b>. Esto los borra de la base junto con su historial (pagos, asistencias, seguimiento y rutinas); no se puede deshacer. Tildá los que quieras eliminar.</p>
+        <div class="row" style="flex-wrap:wrap;margin-bottom:8px"><input id="dp-q" placeholder="Buscar cliente…" value="${esc(filtro)}" style="max-width:240px"><select id="dp-e" style="width:auto"><option value="todos" ${estado === 'todos' ? 'selected' : ''}>Todos</option><option value="inactivos" ${estado === 'inactivos' ? 'selected' : ''}>Inhabilitados (de baja)</option><option value="activos" ${estado === 'activos' ? 'selected' : ''}>Activos</option></select>
+          <button class="sm" id="dp-todos">Tildar los ${l.length} visibles</button><button class="sm ghost" id="dp-ning">Destildar todo</button></div>
+        <div class="tablewrap" style="max-height:340px;overflow:auto"><table><thead><tr><th></th><th>Cliente</th><th>Estado</th><th>Baja</th><th class="num">Pagos</th><th class="num">Asistencias</th></tr></thead><tbody>
+        ${l.map(c => `<tr style="cursor:default"><td><input type="checkbox" data-s="${c.id}" ${sel.has(c.id) ? 'checked' : ''}></td><td>${esc(c.nombre)}</td><td>${c.activo ? '<span class="pill verde">Activo</span>' : '<span class="pill">Inhabilitado</span>'}</td><td>${fmtF(c.fecha_baja)}</td><td class="num">${c.pagos}</td><td class="num">${c.asistencias}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">Sin clientes.</td></tr>'}</tbody></table></div>
+        <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="danger" id="dp-go" ${sel.size ? '' : 'disabled'}>Eliminar de la base (${sel.size})</button></div>`;
+    } else if (rama === 'perdidos') {
+      const d = datos.perdidos || { total: 0, antiguos: 0, hasta: '' };
+      cuerpo = `<p class="small muted">Elimina de la base a los <b>Clientes perdidos</b> (CRM → Seguimiento) que hace más de cierto tiempo que se descartaron, con sus comentarios.</p>
+        <div class="row" style="flex-wrap:wrap;align-items:flex-end"><div class="field" style="margin:0"><label>Perdidos hace más de</label><select id="dp-m" style="width:auto">${[3, 6, 12, 18, 24, 36].map(n => `<option value="${n}" ${n === meses ? 'selected' : ''}>${n} meses${n === 12 ? ' (1 año)' : n === 24 ? ' (2 años)' : ''}</option>`).join('')}</select></div>
+        <span class="small">Hay <b>${d.total}</b> perdidos en total; <b>${d.antiguos}</b> con más de ${meses} meses (hasta el ${fmtF(d.hasta)}).</span></div>
+        <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="danger" id="dp-go" ${d.antiguos ? '' : 'disabled'}>Eliminar ${d.antiguos} perdidos de la base</button></div>`;
+    } else {
+      const l = (datos.rutinas || []).filter(r => !filtro || norm(r.nombre + ' ' + r.profesor).includes(norm(filtro)));
+      cuerpo = `<p class="small muted">Las rutinas normalmente <b>se inhabilitan, no se eliminan</b>. Esto las borra de la base y las saca de los alumnos que las tienen asignadas; no se puede deshacer.</p>
+        <div class="row" style="flex-wrap:wrap;margin-bottom:8px"><input id="dp-q" placeholder="Buscar rutina o profesor…" value="${esc(filtro)}" style="max-width:260px"><button class="sm ghost" id="dp-ning">Destildar todo</button></div>
+        <div class="tablewrap" style="max-height:340px;overflow:auto"><table><thead><tr><th></th><th>Rutina</th><th>Profesor</th><th>Estado</th><th class="num">Alumnos</th></tr></thead><tbody>
+        ${l.map(r => `<tr style="cursor:default"><td><input type="checkbox" data-s="${r.id}" ${sel.has(r.id) ? 'checked' : ''}></td><td>${esc(r.nombre)}</td><td>${esc(r.profesor)}</td><td>${r.activo ? '<span class="pill verde">Activa</span>' : '<span class="pill">Inhabilitada</span>'}</td><td class="num">${r.alumnos}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">Sin rutinas.</td></tr>'}</tbody></table></div>
+        <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="danger" id="dp-go" ${sel.size ? '' : 'disabled'}>Eliminar de la base (${sel.size})</button></div>`;
+    }
+    el.innerHTML = `<h3>Depurar la base</h3><p class="small muted">Eliminar es una acción excepcional del administrador. Elegí qué querés depurar:</p>
+      <div class="row" style="flex-wrap:wrap;margin-bottom:10px"><button class="sm ${rama === 'clientes' ? 'primary' : ''}" data-r="clientes">Clientes</button><button class="sm ${rama === 'perdidos' ? 'primary' : ''}" data-r="perdidos">CRM · Clientes perdidos</button><button class="sm ${rama === 'rutinas' ? 'primary' : ''}" data-r="rutinas">Rutinas personalizadas</button></div>${cuerpo}`;
+    $$('[data-r]', el).forEach(b => b.onclick = () => { rama = b.dataset.r; sel.clear(); filtro = ''; cargarRama().catch(fail); });
+    $$('[data-s]', el).forEach(c => c.onchange = () => { const id = Number(c.dataset.s); c.checked ? sel.add(id) : sel.delete(id); pintar(); });
+    const q = $('#dp-q', el); if (q) q.oninput = () => { filtro = q.value; const pos = q.selectionStart; pintar(); const n = $('#dp-q', el); n.focus(); n.setSelectionRange(pos, pos); };
+    const de = $('#dp-e', el); if (de) de.onchange = () => { estado = de.value; pintar(); };
+    const dt = $('#dp-todos', el); if (dt) dt.onclick = () => { (datos.clientes || []).filter(c => (estado === 'todos' || (estado === 'activos') === c.activo) && (!filtro || norm(c.nombre).includes(norm(filtro)))).forEach(c => sel.add(c.id)); pintar(); };
+    const dn = $('#dp-ning', el); if (dn) dn.onclick = () => { sel.clear(); pintar(); };
+    const dm = $('#dp-m', el); if (dm) dm.onchange = () => { meses = Number(dm.value); cargarRama().catch(fail); };
+    const go = $('#dp-go', el); if (go) go.onclick = async () => {
+      try {
+        if (rama === 'clientes') {
+          const act = (datos.clientes || []).filter(c => sel.has(c.id) && c.activo).length;
+          if (!(await confirmar('¿Eliminar de la base a ' + sel.size + ' cliente(s) con todo su historial? No se puede deshacer.' + (act ? ' ATENCIÓN: ' + act + ' de ellos están activos.' : ''), 'Eliminar', true))) return;
+          const r = await api('POST', '/depurar/clientes', { ids: [...sel], incluir_activos: act > 0 }); toast(r.eliminados + ' clientes eliminados');
+        } else if (rama === 'perdidos') {
+          if (!(await confirmar('¿Eliminar de la base los clientes perdidos de hace más de ' + meses + ' meses? No se puede deshacer.', 'Eliminar', true))) return;
+          const r = await api('POST', '/depurar/perdidos', { meses }); toast(r.eliminados + ' perdidos eliminados');
+        } else {
+          const act = (datos.rutinas || []).filter(r => sel.has(r.id) && r.activo).length;
+          if (!(await confirmar('¿Eliminar de la base ' + sel.size + ' rutina(s)? Se sacan también de los alumnos que las tienen. No se puede deshacer.' + (act ? ' ATENCIÓN: ' + act + ' están activas.' : ''), 'Eliminar', true))) return;
+          const r = await api('POST', '/depurar/rutinas', { ids: [...sel], incluir_activas: act > 0 }); toast(r.eliminadas + ' rutinas eliminadas');
+        }
+        sel.clear(); await cargarRama();
+      } catch (e) { fail(e); }
+    };
+  }
+  await cargarRama();
 }

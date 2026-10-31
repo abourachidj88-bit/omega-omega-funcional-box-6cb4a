@@ -1,7 +1,7 @@
 'use strict';
 // ---------- Finanzas: Caja diaria (la pestaña “Análisis del mes” está en finanzas-ajustes.js) ----------
 function tabsFin(activa) {
-  const t = [['/finanzas', 'Caja diaria', 'fin.caja'], ['/finanzas/mes', 'Análisis del mes', 'fin.analisis'], ['/finanzas/resultados', 'Estado de resultados', 'fin.resultados'], ['/finanzas/presupuesto', 'Presupuesto 12 meses', 'fin.presupuesto']].filter(x => puede(x[2]));
+  const t = [['/finanzas', 'Caja diaria', 'fin.caja'], ['/finanzas/mes', 'Análisis del mes', 'fin.analisis'], ['/finanzas/planes', 'Planes y descuentos', 'fin.analisis'], ['/finanzas/resultados', 'Estado de resultados', 'fin.resultados'], ['/finanzas/presupuesto', 'Presupuesto 12 meses', 'fin.presupuesto']].filter(x => puede(x[2]));
   if (t.length < 2) return '';
   return `<div class="tabs">${t.map(([h, n]) => `<button onclick="ir('#${h}')" class="${h === activa ? 'on' : ''}">${n}</button>`).join('')}</div>`;
 }

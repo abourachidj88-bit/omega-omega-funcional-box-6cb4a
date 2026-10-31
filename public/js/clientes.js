@@ -175,7 +175,7 @@ vista('/clientes/:id', ['admin', 'profesor'], async (main, { id }) => {
           ${puede('cli.editar') ? `<button id="b-acceso">${c.usuario ? 'Restablecer acceso a la app' : 'Crear acceso a la app'}</button>` : ''}
           ${puede('asist.registrar') ? '<a class="btn" href="#/asistencias/cargar" id="b-asist">Cargar asistencia</a>' : ''}
           ${botonWA(c.celular)}
-          ${puede('cli.eliminar') ? '<button id="b-del" class="danger">Eliminar</button>' : ''}</div></div></div>
+          ${puede('cli.editar') && activo ? '<button id="b-inhab" class="danger" title="Los clientes no se eliminan: se inhabilitan. Para volver a habilitarlo, renovale el plan.">Inhabilitar</button>' : ''}</div></div></div>
     ${c.falta_pago ? `<div class="aviso-amarillo"><b>⚠ Falta registrar pago.</b> La fecha de baja se movió hacia adelante sin un pago asociado. Usá “Renovar plan” para cargarlo.</div>` : ''}
     <div class="sum">
       <div class="kpi"><div class="l">${activo ? 'Vence / se da de baja' : 'Baja desde'}</div><div class="v">${fmtF(c.fecha_baja)}</div></div>
@@ -208,7 +208,7 @@ vista('/clientes/:id', ['admin', 'profesor'], async (main, { id }) => {
     tab.innerHTML = `<div class="card"><div class="row between"><h3 style="margin:0">Rutinas de ${esc(c.nombre.split(' ')[0])}</h3>${!puede('plan.rutinas_editar') ? '' : rutinas.length ? '<button class="primary sm" id="r-as">＋ Asignar rutina</button>' : '<a class="btn sm" href="#/planificacion/rutinas">Crear una rutina</a>'}</div>
       ${asig.length ? asig.map(a => `<div class="list-item"><div class="grow"><b>${esc(a.rutina)}</b><div class="small muted">${esc(a.dias_txt)} · ≈ ${a.duracion_min} min</div><div class="small">${a.profesor ? 'Seguimiento: <b>' + esc(a.profesor) + '</b>' : '<span class="muted">Sin profesor de seguimiento</span>'}</div></div><button class="sm" data-v="${a.rutina_id}">Ver</button>${puede('plan.rutinas_editar') ? `<button class="ghost sm" data-q="${a.id}">Quitar</button>` : ''}</div>`).join('') : '<div class="muted" style="margin-top:8px">Este cliente todavía no tiene rutinas asignadas.</div>'}</div>`;
     const as = $('#r-as', tab); if (as) as.onclick = () => {
-      const m = modal('Elegir rutina', rutinas.map(r => `<div class="list-item" data-r="${r.id}" style="cursor:pointer"><div class="grow"><b>${esc(r.nombre)}</b><div class="small muted">${r.ejercicios} ejercicios · ≈ ${r.duracion_min} min</div></div><span class="pill">Elegir ›</span></div>`).join(''));
+      const m = modal('Elegir rutina', rutinas.map(r => `<div class="list-item" data-r="${r.id}" style="cursor:pointer"><div class="grow"><b>${esc(r.nombre)}</b><div class="small muted">${r.creador ? 'Prof. ' + esc(r.creador) + ' · ' : ''}${r.ejercicios} ejercicios · ≈ ${r.duracion_min} min</div></div><span class="pill">Elegir ›</span></div>`).join(''));
       $$('[data-r]', m).forEach(el => el.onclick = () => { m.close(); asignarRutina(rutinas.find(x => x.id === Number(el.dataset.r)), verRut, { id: c.id, nombre: c.nombre }).catch(fail); });
     };
     $$('[data-q]', tab).forEach(b => b.onclick = async () => { try { await api('DELETE', '/rutinas/asignaciones/' + b.dataset.q); verRut(); } catch (e) { fail(e); } });
@@ -303,9 +303,9 @@ vista('/clientes/:id', ['admin', 'profesor'], async (main, { id }) => {
         } catch (e) { fail(e); }
       };
     };
-    const bdel = $('#b-del', main); if (bdel) bdel.onclick = async () => {
-      if (!(await confirmar('¿Eliminar a ' + c.nombre + ' con todo su historial? No se puede deshacer.', 'Eliminar', true))) return;
-      try { await api('DELETE', '/clientes/' + c.id); toast('Alumno eliminado'); ir('#/clientes'); } catch (e) { fail(e); }
+    const binh = $('#b-inhab', main); if (binh) binh.onclick = async () => {
+      if (!(await confirmar('¿Inhabilitar a ' + c.nombre + '? Pasa a baja y conserva todo su historial. Para volver a habilitarlo, renovale el plan.', 'Inhabilitar', true))) return;
+      try { await api('PUT', '/clientes/' + c.id, { fecha_baja: sumaDias(hoyAR(), -1) }); toast('Cliente inhabilitado'); render(); } catch (e) { fail(e); }
     };
   }
 });

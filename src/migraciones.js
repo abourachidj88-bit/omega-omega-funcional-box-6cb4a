@@ -185,6 +185,7 @@ function aplicar(db) {
 }
 // Versión 7: descuentos, seguimiento de alumnos y de visitas, profesor de seguimiento en las rutinas
 function v7(db, add) {
+  add('rutinas', 'creador_id', 'INTEGER');
   db.exec(`
     CREATE TABLE IF NOT EXISTS descuentos (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

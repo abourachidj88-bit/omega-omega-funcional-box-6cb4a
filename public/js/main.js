@@ -1,6 +1,7 @@
 'use strict';
 // ---------- Router y arranque ----------
 let renderId = 0;
+const HIST = [];
 async function render() {
   const mi = ++renderId;
   stopTimers();
@@ -18,6 +19,8 @@ async function render() {
     if (!S.pais) await cargarPais();
     if (mi !== renderId) return;
     const ruta = rutaActual();
+    // historial de pantallas para el botón “← Volver” (vuelve siempre a la pantalla inmediata anterior)
+    if (HIST[HIST.length - 1] !== ruta) { if (HIST.length > 1 && HIST[HIST.length - 2] === ruta) HIST.pop(); else HIST.push(ruta); if (HIST.length > 40) HIST.shift(); }
     for (const v of VISTAS) {
       const m = v.rx.exec(ruta);
       if (!m || !v.roles.includes(S.user.rol)) continue;

@@ -27,7 +27,7 @@ async function esperar() { for (let i = 0; i < 60; i++) { try { await fetch(BASE
     const suma = (f, n) => new Date(Date.parse(f + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
     const lunesDe = (f) => { const d = new Date(f + 'T00:00:00Z'); return suma(f, -((d.getUTCDay() + 6) % 7)); };
     const L0 = lunesDe(hoy());
-    r = await api('GET', '/api/estado'); assert.match(r.data.version, /Versión 7/); paso('la app informa Versión 7');
+    r = await api('GET', '/api/estado'); assert.match(r.data.version, /Versión \d+/); paso('la app informa su versión');
 
     console.log('Biblioteca balanceada y circuitos sin avisos');
     r = await api('GET', '/api/ejercicios', undefined, admin); const ej = r.data;

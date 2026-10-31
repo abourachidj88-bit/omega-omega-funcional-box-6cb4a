@@ -94,6 +94,15 @@ function listaModal(titulo, cols, filas) {
 function enlazarListas(raiz, handlers) {
   raiz.querySelectorAll('[data-lst]').forEach(a => { a.onclick = (e) => { e.preventDefault(); const h = handlers[a.dataset.lst]; if (h) h(); }; });
 }
+// Barra de desplazamiento horizontal también arriba de una tabla ancha (se sincroniza con la de abajo)
+function barraArriba(wrap) {
+  if (!wrap || wrap.dataset.barra) return; wrap.dataset.barra = '1';
+  const top = document.createElement('div'); top.className = 'top-scroll'; top.innerHTML = '<div></div>';
+  wrap.parentNode.insertBefore(top, wrap);
+  const ajustar = () => { top.firstChild.style.width = wrap.scrollWidth + 'px'; top.style.display = wrap.scrollWidth > wrap.clientWidth + 2 ? '' : 'none'; };
+  let a = false; top.onscroll = () => { if (a) { a = false; return; } a = true; wrap.scrollLeft = top.scrollLeft; }; wrap.onscroll = () => { if (a) { a = false; return; } a = true; top.scrollLeft = wrap.scrollLeft; };
+  ajustar(); setTimeout(ajustar, 200); window.addEventListener('resize', ajustar);
+}
 const modales = [];
 function modal(titulo, html, opts = {}) {
   const back = document.createElement('div');
@@ -136,7 +145,7 @@ const PERM_VISTA = {
   '/clientes': 'cli.ver', '/clientes/nuevo': 'cli.editar', '/clientes/:id': 'cli.ver', '/crm': 'crm.ver', '/crm/seguimiento': 'crm.ver',
   '/planificacion': 'plan.semana', '/planificacion/circuito/:id': 'plan.semana', '/planificacion/staff': 'plan.staff', '/planificacion/rutinas': 'plan.rutinas',
   '/planificacion/biblioteca': 'plan.biblioteca', '/planificacion/formatos': 'plan.semana', '/planificacion/semana': 'plan.semana', '/planificacion/equipos': 'plan.config',
-  '/finanzas': 'fin.caja', '/finanzas/mes': 'fin.analisis', '/finanzas/resultados': 'fin.resultados', '/finanzas/presupuesto': 'fin.presupuesto',
+  '/finanzas': 'fin.caja', '/finanzas/mes': 'fin.analisis', '/finanzas/planes': 'fin.analisis', '/finanzas/resultados': 'fin.resultados', '/finanzas/presupuesto': 'fin.presupuesto',
 };
 function vista(patron, roles, fn) {
   const perm = PERM_VISTA[patron];

@@ -2,6 +2,15 @@
 
 Cada modificación que se pide genera una **versión nueva** (1, 2, 3…) a partir de la anterior. Las versiones anteriores quedan guardadas intactas en `OMEGA-versiones/Version-N/` (código fuente, instalador y versión de prueba). Los datos del gimnasio (`C:\OMEGA\datos`) se conservan al pasar de una versión a otra; antes de usar una versión nueva por primera vez OMEGA hace una copia de seguridad automática.
 
+## Versión 8 — 31/10/2026
+- **Botón “← Volver” en todas las pantallas:** vuelve siempre a la pantalla inmediata anterior (por ejemplo, desde “Ver circuito” regresa a Planificación Semanal).
+- **Rutinas Personalizadas ahora es Cliente → Rutinas:** cada cliente con todas sus rutinas (puede tener varias). Se puede agregar una rutina a un cliente desde la biblioteca o creando una nueva a su medida, que queda también en la biblioteca.
+- **Biblioteca de rutinas:** listado por profesor (quien la creó), con las rutinas y a qué alumnos están asignadas. Uso libre para cualquier profesor y asignable a cualquier alumno; solo el creador (y el administrador) la modifica; “Duplicar como mía” para adaptarla. Dos profesores pueden tener rutinas con el mismo nombre: quedan separadas por profesor.
+- **Biblioteca de ejercicios:** el nombre del ejercicio (columna Base) abre su ficha completa (posiciones, progresiones, datos y video); la columna Base y las progresiones se ajustan en 2 renglones y la tabla tiene barra de desplazamiento arriba, para ver más información en una sola pantalla.
+- **Inhabilitar en vez de eliminar:** las rutinas no se eliminan, se inhabilitan y pasan a “Inhabilitadas” desde donde se pueden activar de nuevo; los clientes se inhabilitan (botón “Inhabilitar”), ya no hay “Eliminar” en su ficha.
+- **Ajustes → Depurar la base (solo administrador):** única forma de eliminar de verdad. Clientes (tildando varios), CRM · Clientes perdidos (los de más de X meses) y Rutinas personalizadas (eligiendo del listado).
+- **Finanzas → Planes y descuentos:** los planes (antes en Análisis del mes) y los descuentos (antes en Ajustes) se administran juntos en una pestaña nueva.
+
 ## Versión 7 — 30/10/2026
 - **Biblioteca:** al menos 50 ejercicios de movilidad y 50 de equilibrio (hoy 56 y 96), con cobertura por patrón de movimiento y ejercicios anaeróbicos/potencia para todos los formatos. Los circuitos ya no muestran avisos por falta de ejercicios.
 - **Permisos:** nuevo permiso **Diseño** (el administrador lo tilda por profesor) y los profesores pueden modificar la agenda general y la Agenda Staff.
