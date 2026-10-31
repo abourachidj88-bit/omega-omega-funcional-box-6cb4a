@@ -3,6 +3,11 @@
 function mesMasCRM(mes, n) { const [y, m] = mes.split('-').map(Number); return new Date(Date.UTC(y, m - 1 + n, 1)).toISOString().slice(0, 7); }
 const OBJETIVOS = ['Bajar de peso', 'Ganar músculo', 'Tonificar', 'Mejorar mi condición física', 'Salud y bienestar', 'Rendimiento deportivo', 'Otro'];
 
+function tabsCRM(activa) {
+  const t = [['/crm', 'Visitas'], ['/crm/seguimiento', 'Seguimiento']];
+  return `<div class="tabs">${t.map(([h, n]) => `<button onclick="ir('#${h}')" class="${h === activa ? 'on' : ''}">${n}</button>`).join('')}</div>`;
+}
+
 vista('/crm', ['admin', 'profesor'], async (main) => {
   const adm = S.user.rol === 'admin';
   let mes = sessionStorage.getItem('omega_crm_mes') || hoyAR().slice(0, 7);
@@ -15,15 +20,16 @@ vista('/crm', ['admin', 'profesor'], async (main) => {
         <div><h1 style="margin:0 0 4px">CRM · Visitas</h1><div class="muted">Seguimiento de las personas que pasan por el gimnasio hasta que se inscriben.</div>
           <div class="row" style="margin-top:12px">${puede('crm.gestionar') ? '<button class="primary" id="nueva">＋ Nueva visita</button>' : ''}<button class="ghost" id="b-xls">Exportar</button></div></div>
         <div id="qr-v" class="qr-esquina-wrap"></div></div>
+      ${tabsCRM('/crm')}
       <div class="row" style="margin-bottom:12px"><button class="sm" id="ant">‹</button><input type="month" id="mes" value="${mes}" style="width:auto"><button class="sm" id="sig">›</button><b style="text-transform:capitalize">${nombreMes(mes)}</b></div>
       <div class="grid k" style="margin-bottom:14px">
-        <div class="kpi"><div class="v">${k.visitantes}</div><div class="l">Visitantes del mes</div></div>
-        <div class="kpi verde"><div class="v">${k.convertidos}</div><div class="l">Se inscribieron (pagaron abono)</div></div>
+        <div class="kpi"><div class="v"><a href="#" data-lst="vis">${k.visitantes}</a></div><div class="l">Visitantes del mes</div></div>
+        <div class="kpi verde"><div class="v"><a href="#" data-lst="conv">${k.convertidos}</a></div><div class="l">Se inscribieron (pagaron abono)</div></div>
         <div class="kpi ${k.tasa_conversion >= 30 ? 'verde' : k.tasa_conversion >= 15 ? 'amarillo' : 'rojo'}"><div class="v">${k.tasa_conversion}%</div><div class="l">Tasa de conversión</div></div>
         <div class="kpi"><div class="v" style="font-size:1.2rem">${k.por_origen.manual} <span class="small muted">carga manual</span><br>${k.por_origen.qr} <span class="small muted">por QR</span></div><div class="l">Cómo llegaron los datos</div></div></div>
       <div class="card" style="margin-bottom:14px"><h3>Efectividad de cierre por profesor</h3>
         ${d.por_profesor.length ? `<div class="tablewrap"><table><thead><tr><th>Profesor</th><th class="num">Visitas atendidas</th><th class="num">Inscriptos</th><th class="num">Efectividad</th><th style="width:30%"></th></tr></thead><tbody>
-        ${d.por_profesor.map(p => `<tr style="cursor:default"><td><b>${esc(p.profesor)}</b></td><td class="num">${p.visitas}</td><td class="num">${p.convertidos}</td><td class="num"><b class="${p.tasa >= 30 ? 't-verde' : p.tasa >= 15 ? 't-amarillo' : 't-rojo'}">${p.tasa}%</b></td><td><div class="meter"><i style="width:${Math.round(100 * p.visitas / maxV)}%;opacity:.45"></i></div><div class="meter" style="margin-top:3px"><i style="width:${Math.round(100 * p.convertidos / maxV)}%;background:var(--verde)"></i></div></td></tr>`).join('')}</tbody></table></div>
+        ${d.por_profesor.map(p => `<tr style="cursor:default"><td><b>${esc(p.profesor)}</b></td><td class="num"><a href="#" data-lst="pv:${esc(p.profesor)}">${p.visitas}</a></td><td class="num"><a href="#" data-lst="pc:${esc(p.profesor)}">${p.convertidos}</a></td><td class="num"><b class="${p.tasa >= 30 ? 't-verde' : p.tasa >= 15 ? 't-amarillo' : 't-rojo'}">${p.tasa}%</b></td><td><div class="meter"><i style="width:${Math.round(100 * p.visitas / maxV)}%;opacity:.45"></i></div><div class="meter" style="margin-top:3px"><i style="width:${Math.round(100 * p.convertidos / maxV)}%;background:var(--verde)"></i></div></td></tr>`).join('')}</tbody></table></div>
         <div class="small muted" style="margin-top:6px">Se considera inscripto a quien quedó vinculado a un alumno con al menos un pago registrado.</div>` : '<div class="empty">Todavía no hay visitas este mes.</div>'}</div>
       ${d.por_campana && d.por_campana.length ? `<div class="card" style="margin-bottom:14px"><h3>Rendimiento por campaña</h3><div class="tablewrap"><table><thead><tr><th>Campaña</th><th class="num">Visitas</th><th class="num">Inscriptos</th><th class="num">Conversión</th></tr></thead><tbody>${d.por_campana.map(p => `<tr style="cursor:default"><td><b>${esc(p.campana || p.nombre || 'Sin campaña')}</b></td><td class="num">${p.visitas}</td><td class="num">${p.convertidos}</td><td class="num"><b class="${p.tasa >= 30 ? 't-verde' : p.tasa >= 15 ? 't-amarillo' : 't-rojo'}">${p.tasa}%</b></td></tr>`).join('')}</tbody></table></div></div>` : ''}
       <div class="card"><h3>Visitas de ${nombreMes(mes)}</h3>
@@ -31,6 +37,10 @@ vista('/crm', ['admin', 'profesor'], async (main) => {
         ${d.leads.map(l => `<tr style="cursor:default"><td>${fmtF(l.fecha)}</td><td><b>${esc(l.nombre)}</b>${l.origen === 'qr' ? ' <span class="pill">QR</span>' : ''}</td><td>${esc(l.telefono || '')}</td><td>${esc(l.campana || '—')}${l.referido ? `<div class="small muted">por ${esc(l.referido)}</div>` : ''}</td><td>${esc(l.objetivo || '')}</td><td>${esc(l.profesor || '—')}</td>
           <td>${l.pago ? '<span class="pill verde">Inscripto</span>' : l.estado === 'descartado' ? '<span class="pill">Descartado</span>' : l.cliente_id ? '<span class="pill amarillo">Alumno sin pago</span>' : '<span class="pill naranja">En seguimiento</span>'}</td>
           <td class="right" style="white-space:nowrap">${l.telefono ? botonWA(l.telefono, 'WhatsApp', 'sm') + ' ' : ''}${puede('crm.gestionar') ? `<button class="sm" data-ed="${l.id}">Editar</button>` : ''}${puede('crm.gestionar') && puede('cli.editar') && !l.cliente_id ? ` <button class="sm primary" data-al="${l.id}">Pasar a alumno</button>` : ''}${puede('crm.eliminar') ? ` <button class="danger sm" data-del="${l.id}">✕</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">No hay visitas cargadas en este mes. Cargalas con “Nueva visita” o compartí el QR para que las completen ellos.</div>'}</div>`;
+    const fl = (l) => l.map(x => [fmtF(x.fecha), x.nombre, x.profesor || '—', x.pago ? 'Inscripto' : x.estado === 'descartado' ? 'Descartado' : 'En seguimiento']);
+    const H = { vis: () => listaModal('Visitantes de ' + nombreMes(mes), ['Fecha', 'Nombre', 'Atendió', 'Estado'], fl(d.leads)), conv: () => listaModal('Se inscribieron', ['Fecha', 'Nombre', 'Atendió', 'Estado'], fl(d.leads.filter(l => l.pago))) };
+    d.por_profesor.forEach(p => { H['pv:' + p.profesor] = () => listaModal('Visitas atendidas por ' + p.profesor, ['Fecha', 'Nombre', 'Atendió', 'Estado'], fl(d.leads.filter(l => (l.profesor || 'Sin profesor') === p.profesor || l.profesor === p.profesor))); H['pc:' + p.profesor] = () => listaModal('Inscriptos de ' + p.profesor, ['Fecha', 'Nombre', 'Atendió', 'Estado'], fl(d.leads.filter(l => l.pago && ((l.profesor || 'Sin profesor') === p.profesor || l.profesor === p.profesor)))); });
+    enlazarListas(main, H);
     const set = (m) => { mes = m; cargar().catch(fail); };
     $('#mes', main).onchange = (e) => e.target.value && set(e.target.value);
     $('#ant', main).onclick = () => set(mesMasCRM(mes, -1)); $('#sig', main).onclick = () => set(mesMasCRM(mes, 1));
@@ -101,4 +111,46 @@ async function qrVisitas(cont) {
     $('#cp', m).onclick = () => copiarTexto(link);
     $('#imp', m).onclick = () => { document.body.classList.add('imprimiendo'); try { window.print(); } catch (_) {} setTimeout(() => document.body.classList.remove('imprimiendo'), 800); };
   };
+}
+
+
+// ---------- CRM · Seguimiento de las personas que visitaron el gimnasio y todavía no se inscribieron ----------
+vista('/crm/seguimiento', ['admin', 'profesor'], async (main) => {
+  const gest = puede('crm.gestionar');
+  let verPerdidos = false, filtro = '';
+  async function cargar() {
+    const d = await api('GET', '/crm/seguimiento' + (filtro ? '?profesor_id=' + filtro : ''));
+    const lista = verPerdidos ? d.perdidos : d.en_seguimiento;
+    main.innerHTML = `<div class="page-title"><h1>CRM · Seguimiento</h1></div>${tabsCRM('/crm/seguimiento')}
+      <div class="row" style="margin-bottom:12px;flex-wrap:wrap">
+        <div class="tabs" style="margin:0"><button data-v="0" class="${verPerdidos ? '' : 'on'}">En seguimiento <span class="pill">${d.en_seguimiento.length}</span></button><button data-v="1" class="${verPerdidos ? 'on' : ''}">Clientes perdidos <span class="pill">${d.perdidos.length}</span></button></div>
+        <span class="small muted">Profesor:</span><select id="f-prof" style="width:auto"><option value="">Todos</option>${d.profesores.map(p => `<option value="${p.id}" ${String(p.id) === filtro ? 'selected' : ''}>${esc(p.nombre)}</option>`).join('')}</select></div>
+      <p class="muted small">${verPerdidos ? 'Personas que visitaron el gimnasio y decidieron no inscribirse. Podés volver a ponerlas en seguimiento.' : 'Personas que visitaron el gimnasio y todavía no se inscribieron. Cargá comentarios de cada contacto con su fecha; si deciden no venir, pasalas a Clientes perdidos.'}</p>
+      ${lista.length ? `<div class="tablewrap"><table><thead><tr><th>Nombre</th><th>Profesor asignado</th><th>Objetivo</th><th>Pasó por el gimnasio</th>${verPerdidos ? '<th>Motivo</th>' : ''}<th>Comentarios</th><th></th></tr></thead><tbody>
+        ${lista.map(l => `<tr style="cursor:default"><td><b>${esc(l.nombre)}</b>${l.telefono ? `<div class="small muted">${esc(l.telefono)}</div>` : ''}</td><td>${esc(l.profesor || '—')}</td><td>${esc(l.objetivo || '—')}</td><td>${fmtF(l.fecha)}</td>${verPerdidos ? `<td>${esc(l.motivo_perdido || '—')}<div class="small muted">${l.perdido_fecha ? fmtF(l.perdido_fecha) : ''}</div></td>` : ''}
+          <td style="min-width:260px">${l.comentarios.length ? l.comentarios.slice(0, 3).map(c => `<div class="small"><span class="muted">${fmtF(c.fecha)} · ${esc(c.autor || '')}</span><br>${esc(c.texto)}</div>`).join('') + (l.comentarios.length > 3 ? `<div class="small muted">+${l.comentarios.length - 3} más</div>` : '') : '<span class="muted small">Sin comentarios</span>'}</td>
+          <td class="right" style="white-space:nowrap">${l.telefono ? botonWA(l.telefono, 'WhatsApp', 'sm') + ' ' : ''}${gest ? `<button class="sm" data-c="${l.id}">Comentarios</button> ${verPerdidos ? `<button class="sm" data-re="${l.id}">Volver a seguimiento</button>` : `<button class="sm danger" data-pe="${l.id}">Quitar de seguimiento</button>`}` : ''}</td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">${verPerdidos ? 'No hay clientes perdidos.' : 'No hay visitas en seguimiento.'}</div>`}`;
+    $$('[data-v]', main).forEach(b => b.onclick = () => { verPerdidos = b.dataset.v === '1'; cargar().catch(fail); });
+    $('#f-prof', main).onchange = (e) => { filtro = e.target.value; cargar().catch(fail); };
+    $$('[data-pe]', main).forEach(b => b.onclick = () => {
+      const l = d.en_seguimiento.find(x => x.id === Number(b.dataset.pe));
+      const m = modal('Quitar de seguimiento', `<p><b>${esc(l.nombre)}</b> pasa a <b>Clientes perdidos</b> porque decidió no asistir al gimnasio.</p>${campo('Motivo (opcional)', '<input id="mot" maxlength="200" placeholder="Ej.: queda lejos, precio, otro gimnasio…">')}
+        <div class="row" style="justify-content:flex-end;margin-top:10px"><button data-close>Cancelar</button><button class="danger" id="ok">Pasar a perdidos</button></div>`);
+      $('#ok', m).onclick = async () => { try { await api('PUT', '/leads/' + l.id + '/perdido', { motivo: $('#mot', m).value }); m.close(); toast('Movido a Clientes perdidos'); cargar(); } catch (e) { fail(e); } };
+    });
+    $$('[data-re]', main).forEach(b => b.onclick = async () => { try { await api('PUT', '/leads/' + b.dataset.re + '/reabrir'); toast('Vuelve a estar en seguimiento'); cargar(); } catch (e) { fail(e); } });
+    $$('[data-c]', main).forEach(b => b.onclick = () => comentariosLead(lista.find(x => x.id === Number(b.dataset.c)), cargar));
+  }
+  await cargar();
+});
+
+function comentariosLead(l, despues) {
+  const m = modal('Seguimiento de ' + l.nombre, `<div class="row" style="align-items:flex-end;margin-bottom:10px;flex-wrap:wrap"><div class="grow" style="min-width:220px">${campo('Comentario', '<textarea id="ct" rows="2" maxlength="1000" placeholder="Qué se habló, próximo paso…" style="width:100%"></textarea>')}</div>${campo('Fecha', `<input type="date" id="cf" value="${hoyAR()}">`)}<button class="primary" id="ca">Agregar</button></div>
+    <div id="cl">${l.comentarios.length ? l.comentarios.map(c => `<div class="list-item"><div class="grow"><div class="small muted">${fmtF(c.fecha)} · ${esc(c.autor || '')}</div>${esc(c.texto)}</div><button class="ghost sm" data-dc="${c.id}">Quitar</button></div>`).join('') : '<div class="empty small">Sin comentarios todavía.</div>'}</div>
+    <div class="row" style="justify-content:flex-end"><button data-close>Cerrar</button></div>`, { wide: true });
+  $('#ca', m).onclick = async () => {
+    const t = $('#ct', m).value.trim(); if (!t) return toast('Escribí el comentario', 'warn');
+    try { await api('POST', '/comentarios', { tipo: 'lead', ref_id: l.id, texto: t, fecha: $('#cf', m).value }); m.close(); toast('Comentario guardado'); despues(); } catch (e) { fail(e); }
+  };
+  $$('[data-dc]', m).forEach(b => b.onclick = async () => { try { await api('DELETE', '/comentarios/' + b.dataset.dc); m.close(); despues(); } catch (e) { fail(e); } });
 }

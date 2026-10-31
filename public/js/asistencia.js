@@ -2,7 +2,7 @@
 // ---------- Módulo 5: Dashboard general, carga de asistencias y escáner QR ----------
 
 function tabsAsist(activa) {
-  const t = [['/asistencias', 'Dashboard'], ['/asistencias/cargar', 'Cargar asistencias'], ['/asistencias/qr', 'Escanear QR'], ['/asistencias/qr-gimnasio', 'QR del gimnasio']];
+  const t = [['/asistencias', 'Dashboard'], ['/asistencias/seguimiento', 'Seguimiento'], ['/asistencias/cargar', 'Cargar asistencias'], ['/asistencias/qr', 'Escanear QR'], ['/asistencias/qr-gimnasio', 'QR del gimnasio']];
   return `<div class="tabs">${t.map(([h, n]) => `<button onclick="ir('#${h}')" class="${h === activa ? 'on' : ''}">${n}</button>`).join('')}</div>`;
 }
 
@@ -14,7 +14,6 @@ vista('/asistencias', ['admin', 'profesor'], async (main) => {
     if (primera && !d.porHora.length) { for (let i = 1; i <= 7 && !d.porHora.length; i++) { const f = sumaDias(hoyAR(), -i); const x = await api('GET', '/dashboard?fecha=' + f); if (x.porHora.length) { d = x; fecha = f; } } }
     primera = false;
     const dias = d.semana.map(s => ({ x: s.fecha.slice(8, 10) + '/' + s.fecha.slice(5, 7), v: s.total, color: s.fecha === fecha ? 'var(--brand2)' : '' }));
-    const ineficHoras = Object.entries(d.ineficiencias_por_horario).sort((a, b) => b[1] - a[1]);
     main.innerHTML = `
       <div class="page-title"><h1>Asistencias</h1><div class="actions"><a class="btn primary" href="#/asistencias/cargar">Cargar asistencias</a><a class="btn" href="#/asistencias/qr">Escanear QR</a></div></div>
       ${tabsAsist('/asistencias')}
@@ -22,12 +21,12 @@ vista('/asistencias', ['admin', 'profesor'], async (main) => {
         <button class="sm" id="ant">‹</button><input type="date" id="fecha" value="${fecha}" style="width:auto"><button class="sm" id="sig">›</button>
         <button class="sm ghost" id="hoy">Hoy</button><span class="muted">${fmtFlargo(fecha)}</span></div>
       <div class="grid k" style="margin-bottom:14px">
-        <div class="kpi"><div class="v">${d.kpis.asistencias_dia}</div><div class="l">Asistencias del día</div></div>
-        <div class="kpi verde"><div class="v">${d.kpis.activos}</div><div class="l">Alumnos activos</div></div>
-        <div class="kpi naranja"><div class="v">${d.kpis.activos_en_riesgo}</div><div class="l">Activos en riesgo</div></div>
-        <div class="kpi amarillo"><div class="v">${d.kpis.bajas_recuperables}</div><div class="l">Bajas recuperables</div></div>
+        <div class="kpi"><div class="v"><a href="#" data-lst="dia">${d.kpis.asistencias_dia}</a></div><div class="l">Asistencias del día</div></div>
+        <div class="kpi verde"><div class="v">${d.kpis.activos}</div><div class="l">Alumnos activos</div><button class="sm" data-lista="activos">Ver listado</button></div>
+        <div class="kpi naranja"><div class="v">${d.kpis.activos_en_riesgo}</div><div class="l">Activos en riesgo</div><button class="sm" data-lista="activos_en_riesgo">Ver listado</button></div>
+        <div class="kpi amarillo"><div class="v">${d.kpis.bajas_recuperables}</div><div class="l">Bajas recuperables</div><button class="sm" data-lista="bajas_recuperables">Ver listado</button></div>
       </div>
-      ${d.porHora.filter(h => h.exceso_reservas > 0).map(h => `<div class="aviso-mat"><b>⚠ Ineficiencia de Materiales · ${hh(h.hora)}:</b> hay ${h.reservas} reservas y el límite de materiales es ${h.limite_reservas}. Conviene adaptar el circuito o duplicar estaciones (nadie queda sin lugar: las reservas son informativas).</div>`).join('')}
+      ${d.porHora.filter(h => h.exceso_reservas > 0).map(h => `<div class="aviso-mat"><b>⚠ Ineficiencia de Materiales · ${hh(h.hora)}:</b> hay ${h.reservas} inscriptos y el límite es ${h.limite_reservas} (configurable en Ajustes). Conviene adaptar el circuito o duplicar estaciones (nadie queda sin lugar: las reservas son informativas).</div>`).join('')}
       <div class="card"><h3>Asistentes por horario</h3>
         <div class="small muted">Capacidad de diseño del circuito y el equipamiento: ${d.capacidad} personas. Las clases que la superan se marcan en rojo.</div>
         ${d.porHora.length ? barras(d.porHora.map(h => ({ x: hh(h.hora).slice(0, 2) + ' h', v: h.total, exc: h.exceso > 0, label: h.exceso > 0 ? h.total + ' (+' + h.exceso + ')' : (h.total || '') })), { min: d.capacidad }) : '<div class="empty">No hay clases en este día.</div>'}
@@ -35,18 +34,54 @@ vista('/asistencias', ['admin', 'profesor'], async (main) => {
       <div class="card"><h3>Detalle por clase</h3>
         ${d.porHora.length ? `<div class="tablewrap"><table><thead><tr><th>Horario</th><th>Formato</th><th class="num">Reservas</th><th class="num">Asistentes</th><th class="num">QR</th><th class="num">Manual</th><th class="num">Sobre ${d.capacidad}</th></tr></thead><tbody>
         ${d.porHora.map(h => `<tr style="cursor:default"><td><b>${hh(h.hora)}</b></td><td>${chipFormato(h.formato ? { nombre: h.formato, color: h.color } : null)}</td><td class="num ${h.exceso_reservas ? 't-rojo' : ''}">${h.reservas ?? 0}${h.exceso_reservas ? ' ⚠' : ''}</td><td class="num"><b>${h.total}</b></td><td class="num">${h.qr}</td><td class="num">${h.manual}</td><td class="num ${h.exceso ? 't-rojo' : 'muted'}">${h.exceso ? '+' + h.exceso : '—'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sin clases.</div>'}</div>
-      <div class="card"><h3>Ineficiencias en la asignación de materiales <span class="muted small">(últimos 30 días)</span></h3>
-        <p class="small muted">Cuando una clase supera las ${d.capacidad} personas el ingreso se registra igual (no hay límite). Acá se muestra como una ineficiencia: el circuito y el equipamiento están pensados para ${d.capacidad}.</p>
-        ${d.ineficiencias.length ? `${ineficHoras.length ? `<div class="infobox" style="margin-bottom:10px">Horarios que más se desbordan: ${ineficHoras.slice(0, 4).map(([h, n]) => '<b>' + hh(h) + '</b> (' + n + (n === 1 ? ' vez' : ' veces') + ')').join(' · ')}</div>` : ''}
-        <div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Horario</th><th>Formato</th><th class="num">Asistentes</th><th class="num">Exceso</th><th>Equipamiento que quedó corto</th></tr></thead><tbody>
-        ${d.ineficiencias.map(i => `<tr style="cursor:default"><td>${fmtF(i.fecha)}</td><td>${hh(i.hora)}</td><td>${esc(i.formato || '—')}</td><td class="num">${i.asistentes}</td><td class="num t-rojo">+${i.exceso}</td><td>${i.faltantes.length ? i.faltantes.map(f => esc(f.nombre) + ': faltan ' + f.faltan + ' (hay ' + f.stock + ', se necesitan ' + f.demanda + ')').join('<br>') : '<span class="muted">El equipamiento alcanzó</span>'}</td></tr>`).join('')}</tbody></table></div>`
-        : '<div class="okbox">Ninguna clase superó la capacidad en los últimos 30 días.</div>'}</div>
       <div class="card"><h3>Asistencias de los últimos 14 días</h3>${barras(dias)}</div>`;
     const set = (f) => { fecha = f; cargar().catch(fail); };
     $('#fecha', main).onchange = (e) => e.target.value && set(e.target.value);
     $('#ant', main).onclick = () => set(sumaDias(fecha, -1));
     $('#sig', main).onclick = () => set(sumaDias(fecha, 1));
     $('#hoy', main).onclick = () => set(hoyAR());
+    const TIT = { activos: 'Alumnos activos', activos_en_riesgo: 'Activos en riesgo', bajas_recuperables: 'Bajas recuperables' };
+    enlazarListas(main, { dia: () => listaModal('Asistencias del ' + fmtF(fecha), ['Alumno', 'Horario', 'Origen'], d.listas.asistentes_dia.map(x => [{ t: x.nombre, h: '#/clientes/' + x.id }, hh(x.hora), x.origen === 'qr' ? 'QR' : 'Manual'])) });
+    $$('[data-lista]', main).forEach(b => b.onclick = () => {
+      const k = b.dataset.lista, l = d.listas[k];
+      const m = modal(TIT[k] + ' (' + l.length + ')', `<div class="tablewrap" style="max-height:60vh;overflow:auto"><table><thead><tr><th>Alumno</th><th>Última clase</th>${k === 'bajas_recuperables' ? '<th>Se dio de baja</th>' : '<th>Vence</th>'}<th></th></tr></thead><tbody>
+        ${l.map(c => `<tr style="cursor:default"><td><a href="#/clientes/${c.id}" data-close><b>${esc(c.nombre)}</b></a></td><td>${c.ultima_clase ? esc(c.ultima_clase) : '<span class="muted">sin clases</span>'}${k === 'activos_en_riesgo' ? `<div class="small t-amarillo">${esc(c.texto_asistencia || '')}</div>` : ''}</td><td>${k === 'bajas_recuperables' ? fmtF(c.fecha_baja) + `<div class="small muted">hace ${c.dias_baja} días</div>` : fmtF(c.fecha_baja)}</td><td class="right">${c.celular ? botonWA(c.celular, 'WhatsApp', 'sm') : ''}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">No hay alumnos en este grupo.</td></tr>'}</tbody></table></div>
+        <div class="row" style="justify-content:flex-end;margin-top:10px"><button data-close>Cerrar</button></div>`, { wide: true });
+    });
+  }
+  await cargar();
+});
+
+// ----- Seguimiento: análisis mensual de asistencias
+vista('/asistencias/seguimiento', ['admin', 'profesor'], async (main) => {
+  let mes = sessionStorage.getItem('omega_seg_mes') || hoyAR().slice(0, 7);
+  const mm = (m, n) => { const [y, x] = m.split('-').map(Number); return new Date(Date.UTC(y, x - 1 + n, 1)).toISOString().slice(0, 7); };
+  const dif = (v, sufijo) => v === 0 ? '<span class="muted">igual</span>' : `<b class="${v > 0 ? 't-rojo' : 't-verde'}">${v > 0 ? '▲ +' : '▼ '}${v}${sufijo || ''}</b>`;
+  async function cargar() {
+    sessionStorage.setItem('omega_seg_mes', mes);
+    const d = await api('GET', '/asistencias/seguimiento?mes=' + mes);
+    const r = d.renovacion, maxC = Math.max(1, ...d.clases.map(x => x.asistencias));
+    main.innerHTML = `<div class="page-title"><h1>Asistencias</h1></div>${tabsAsist('/asistencias/seguimiento')}
+      <div class="row" style="margin-bottom:12px"><button class="sm" id="ant">‹</button><input type="month" id="mes" value="${mes}" style="width:auto"><button class="sm" id="sig">›</button><b style="text-transform:capitalize">${nombreMes(mes)}</b><span class="muted">${d.asistencias} asistencias en el mes</span></div>
+      <div class="grid c2">
+        <div class="card"><h3>1 · Clases con más asistencias</h3>${d.clases.length ? `<div class="tablewrap"><table><thead><tr><th>Clase</th><th class="num">Asistencias</th><th class="num">Promedio por clase</th><th style="width:30%"></th></tr></thead><tbody>${d.clases.map((c, i) => `<tr style="cursor:default"><td>${i === 0 ? '🏆 ' : ''}${chipFormato(c.clase === 'Sin formato' ? null : { nombre: c.clase, color: c.color })}${c.clase === 'Sin formato' ? 'Sin formato' : ''}</td><td class="num"><b>${c.asistencias}</b></td><td class="num">${c.promedio}</td><td><div class="meter"><i style="width:${Math.round(100 * c.asistencias / maxC)}%"></i></div></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sin asistencias en el mes.</div>'}</div>
+        <div class="card"><h3>2 · Profesores con más asistencias</h3>${d.profesores.length ? `<div class="tablewrap"><table><thead><tr><th>Profesor</th><th class="num">Asistencias</th><th class="num">Clases dadas</th></tr></thead><tbody>${d.profesores.map((p, i) => `<tr style="cursor:default"><td>${i === 0 && p.profesor.indexOf('Sin ') !== 0 ? '🏆 ' : ''}<b>${esc(p.profesor)}</b></td><td class="num"><b>${p.asistencias}</b></td><td class="num">${p.clases}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sin asistencias en el mes.</div>'}</div></div>
+      <div class="grid c2" style="margin-top:14px">
+        <div class="card"><h3>3 · Alumnos que no renovaron el plan</h3>
+          <div class="grid k"><div class="kpi ${r.no_renovaron ? 'rojo' : 'verde'}"><div class="v"><a href="#" data-lst="actual">${r.no_renovaron}</a></div><div class="l">No renovaron en ${nombreMes(mes)}</div></div>
+            <div class="kpi"><div class="v" style="font-size:1.1rem">${dif(r.mes_anterior.dif)}</div><div class="l">vs ${nombreMes(r.mes_anterior.mes)} (<a href="#" data-lst="anterior">${r.mes_anterior.n}</a>)</div></div>
+            <div class="kpi"><div class="v" style="font-size:1.1rem">${dif(r.promedio_3_meses.dif)}</div><div class="l">vs promedio de los 3 meses anteriores (${r.promedio_3_meses.n})</div></div></div>
+          <p class="small muted" style="margin-top:8px">Planes que vencieron en el mes y no se renovaron dentro de los 7 días siguientes. Vencieron <a href="#" data-lst="venc">${r.vencimientos}</a>; renovaron <a href="#" data-lst="renov">${r.renovaron}</a>.</p>
+          ${r.lista.length ? `<div class="small">${r.lista.map(x => `<a href="#/clientes/${x.id}">${esc(x.nombre)}</a> <span class="muted">(${fmtF(x.vencio)})</span>`).join(' · ')}</div>` : ''}</div>
+        <div class="card"><h3>4 · Horarios con más asistencias</h3>${d.horarios.length ? `<div class="tablewrap"><table><thead><tr><th>Horario</th><th class="num">Asistencias</th><th class="num">Promedio por día</th></tr></thead><tbody>${d.horarios.map((h, i) => `<tr style="cursor:default"><td>${i === 0 ? '🏆 ' : ''}<b>${hh(h.hora)}</b></td><td class="num"><b>${h.asistencias}</b></td><td class="num">${h.promedio}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sin asistencias en el mes.</div>'}</div></div>`;
+    const LST = { actual: ['No renovaron en ' + nombreMes(mes), r.lista], anterior: ['No renovaron en ' + nombreMes(r.mes_anterior.mes), r.lista_mes_anterior], venc: ['Planes que vencieron en ' + nombreMes(mes), [...r.lista, ...r.renovaron_lista]], renov: ['Renovaron en ' + nombreMes(mes), r.renovaron_lista] };
+    main.querySelectorAll('[data-lst]').forEach(a => a.onclick = (e) => {
+      e.preventDefault(); const [t, l] = LST[a.dataset.lst];
+      modal(t + ' (' + l.length + ')', `<div class="tablewrap" style="max-height:60vh;overflow:auto"><table><thead><tr><th>Alumno</th><th>Venció</th></tr></thead><tbody>${l.length ? l.map(x => `<tr style="cursor:default"><td><a href="#/clientes/${x.id}" data-close>${esc(x.nombre)}</a></td><td>${fmtF(x.vencio)}</td></tr>`).join('') : '<tr><td colspan="2" class="muted">Sin alumnos</td></tr>'}</tbody></table></div>`);
+    });
+    const set = (m) => { mes = m; cargar().catch(fail); };
+    $('#mes', main).onchange = (e) => e.target.value && set(e.target.value);
+    $('#ant', main).onclick = () => set(mm(mes, -1)); $('#sig', main).onclick = () => set(mm(mes, 1));
   }
   await cargar();
 });

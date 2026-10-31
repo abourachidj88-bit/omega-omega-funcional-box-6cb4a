@@ -91,8 +91,16 @@ vista('/perfil', ['cliente'], async (main) => {
       <div class="kpi"><div class="l">Cumplimiento</div><div class="v">${p.cumplimiento_objetivo}%</div></div></div>
     <div class="card"><h3>Asistencia por semana</h3><div class="legend"><span><i style="background:var(--verde)"></i>3 o más clases</span><span><i style="background:var(--brand)"></i>Menos de 3</span></div>${barras(p.semanas.map(s => ({ x: s.desde.slice(8) + '/' + s.desde.slice(5, 7), v: s.asistencias, color: s.asistencias >= 3 ? 'var(--verde)' : '' })), { min: 3 })}</div>
     <div class="card"><h3>Mis clases (${p.asistencias.length})</h3>${p.asistencias.length ? p.asistencias.slice(0, 30).map(a => `<div class="list-item"><div class="grow"><b>${fmtFlargo(a.fecha)}</b><div class="small muted">${hh(a.hora)} · ${esc(a.formato || '')}</div></div></div>`).join('') : '<div class="empty">Todavía no registraste clases.</div>'}</div>
+    <div class="card" id="sens"></div>
     <div class="card" id="clave"></div>`;
   formClave($('#clave', main));
+  async function sensacion() {
+    const el = $('#sens', main); let v = null; try { v = (await api('GET', '/mi/sensacion')).sensacion; } catch (_) {}
+    el.innerHTML = `<h3>¿Cómo te sentís en el gimnasio esta semana?</h3><div class="small muted" style="margin-bottom:8px">Calificá del 1 (mal) al 10 (excelente). Tu profe lo ve para acompañarte mejor.</div>
+      <div class="row" style="flex-wrap:wrap;gap:6px">${Array.from({ length: 10 }, (_, i) => `<button class="sm ${v === i + 1 ? 'primary' : ''}" data-s="${i + 1}" style="min-width:40px">${i + 1}</button>`).join('')}</div>${v ? `<div class="small t-verde" style="margin-top:6px">Tu calificación de esta semana: ${v}/10. Podés cambiarla hasta el domingo.</div>` : ''}`;
+    $$('[data-s]', el).forEach(b => b.onclick = async () => { try { await api('PUT', '/mi/sensacion', { sensacion: Number(b.dataset.s) }); toast('¡Gracias!'); sensacion(); } catch (e) { fail(e); } });
+  }
+  sensacion();
   const subir = async (cap) => { try { const foto = await pedirFoto(cap); if (!foto) return; await api('PUT', '/mi-perfil/foto', { foto }); toast('Foto actualizada'); render(); } catch (e) { fail(e); } };
   $('#f-cam', main).onclick = () => subir(true); $('#f-gal', main).onclick = () => subir(false);
 });

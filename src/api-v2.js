@@ -205,7 +205,15 @@ function registrar(c) {
     const b = await readBody(req);
     const n = get('SELECT * FROM notificaciones WHERE id = ?', Number(params.id));
     if (!n) throw new HttpError(404, 'Notificación no encontrada');
-    run("UPDATE notificaciones SET estado = 'resuelta', resolucion = ? WHERE id = ?", str(b.resolucion, 200) || 'Resuelta', n.id);
+    let resol = str(b.resolucion, 200) || 'Resuelta';
+    // Premio por recomendar: el descuento elegido queda pendiente en la ficha del alumno y se aplica solo en su próxima renovación
+    if (b.descuento_id && n.cliente_id) {
+      const d = get('SELECT * FROM descuentos WHERE id = ? AND activo = 1', Number(b.descuento_id));
+      if (!d) throw bad('El descuento elegido no existe');
+      run('UPDATE clientes SET desc_id = ?, desc_restantes = ? WHERE id = ?', d.id, d.meses, n.cliente_id);
+      resol = 'Premio: descuento ' + d.nombre + ' en la próxima renovación';
+    }
+    run("UPDATE notificaciones SET estado = 'resuelta', resolucion = ? WHERE id = ?", resol, n.id);
     return { ok: true, pendientes: notifPendientes() };
   });
 
@@ -244,8 +252,8 @@ function registrar(c) {
   };
   route('GET', '/api/rutinas', STAFF, () => all('SELECT r.*, (SELECT COUNT(*) FROM rutina_items i WHERE i.rutina_id = r.id) AS ejercicios FROM rutinas r WHERE r.activo = 1 ORDER BY r.nombre COLLATE NOCASE'));
   const DIAS_TXT = ['', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
-  const asignacionesSql = `SELECT rc.id, rc.rutina_id, rc.cliente_id, rc.dias, r.nombre AS rutina, r.duracion_min, c.nombre AS cliente
-    FROM rutina_clientes rc JOIN rutinas r ON r.id = rc.rutina_id AND r.activo = 1 JOIN clientes c ON c.id = rc.cliente_id`;
+  const asignacionesSql = `SELECT rc.id, rc.rutina_id, rc.cliente_id, rc.dias, rc.profesor_id, up.nombre AS profesor, r.nombre AS rutina, r.duracion_min, c.nombre AS cliente
+    FROM rutina_clientes rc LEFT JOIN usuarios up ON up.id = rc.profesor_id JOIN rutinas r ON r.id = rc.rutina_id AND r.activo = 1 JOIN clientes c ON c.id = rc.cliente_id`;
   const conDias = (x) => ({ ...x, dias: String(x.dias).split(',').map(Number), dias_txt: String(x.dias).split(',').map(d => DIAS_TXT[Number(d)]).join(', ') });
   route('GET', '/api/rutinas/asignaciones', STAFF, ({ query }) => {
     const cid = Number(query.cliente_id || 0), rid = Number(query.rutina_id || 0);
@@ -258,10 +266,12 @@ function registrar(c) {
     if (!ids.length) throw bad('Elegí al menos un cliente');
     const dias = [...new Set((Array.isArray(b.dias) ? b.dias : []).map(Number).filter(n => n >= 1 && n <= 7))].sort((a, z) => a - z);
     if (!dias.length) throw bad('Marcá al menos un día de la semana');
+    const profSeg = b.profesor_id ? Number(b.profesor_id) : null;
+    if (profSeg && !get("SELECT 1 AS x FROM usuarios WHERE id = ? AND rol IN ('admin','profesor') AND activo = 1", profSeg)) throw bad('El profesor de seguimiento no existe');
     let n = 0;
     tx(() => ids.forEach(cid => {
       if (!get('SELECT 1 AS x FROM clientes WHERE id = ?', cid)) return;
-      run('INSERT INTO rutina_clientes (rutina_id, cliente_id, dias, creado) VALUES (?,?,?,?) ON CONFLICT(rutina_id, cliente_id) DO UPDATE SET dias = excluded.dias', rutina.id, cid, dias.join(','), new Date().toISOString()); n++;
+      run('INSERT INTO rutina_clientes (rutina_id, cliente_id, dias, creado, profesor_id) VALUES (?,?,?,?,?) ON CONFLICT(rutina_id, cliente_id) DO UPDATE SET dias = excluded.dias, profesor_id = excluded.profesor_id', rutina.id, cid, dias.join(','), new Date().toISOString(), profSeg); n++;
     }));
     return { ok: true, asignados: n };
   });

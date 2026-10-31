@@ -75,7 +75,7 @@ if (typeof window !== 'undefined') window.Forecast = Forecast;
     const cat = (id, t, v, p) => F.push({ id, t, cat: true, v, p });
     const det = (id, t, v, p, ent) => F.push({ id, t, det: true, v, p, ent });
     const tot = (t, v, p) => F.push({ t, tot: true, v, p });
-    cat('ingresos', 'Ingresos', c => c.ingresos.total, () => 100);
+    cat('ingresos', 'Ingresos Plan Full', c => c.ingresos.plan_full, () => 100);
     [...new Set(C.flatMap(c => c.ingresos.items.map(i => i.nombre)))].forEach(n => det('ingresos', n, c => (c.ingresos.items.find(i => i.nombre === n) || { monto: 0 }).monto, c => (c.ingresos.items.find(i => i.nombre === n) || { pct: 0 }).pct));
     det('ingresos', 'Cantidad de alumnos que pagaron', c => c.ingresos.alumnos, null, true);
     det('ingresos', 'Precio promedio por alumno', c => c.ingresos.ticket, null);
@@ -83,6 +83,8 @@ if (typeof window !== 'undefined') window.Forecast = Forecast;
       det('ingresos', n + ' · alumnos', c => (c.ingresos.por_plan.find(p => p.plan === n) || { alumnos: 0 }).alumnos, null, true);
       det('ingresos', n + ' · precio promedio', c => (c.ingresos.por_plan.find(p => p.plan === n) || { precio_promedio: 0 }).precio_promedio, null);
     });
+    tot('Descuentos totales otorgados', c => -c.ingresos.descuentos, c => c.ingresos.descuentos_pct);
+    tot('Ingreso neto (Plan Full − Descuentos)', c => c.ingresos.neto, c => c.ingresos.neto_pct);
     cat('costos', 'Costos operativos', c => -c.costos.total, c => c.costos.pct);
     C[0].costos.items.forEach(it => det('costos', it.nombre, c => -c.costos.items.find(i => i.nombre === it.nombre).monto, c => c.costos.items.find(i => i.nombre === it.nombre).pct));
     tot('Margen bruto', c => c.margen_bruto.monto, c => c.margen_bruto.pct);
@@ -105,7 +107,7 @@ if (typeof window !== 'undefined') window.Forecast = Forecast;
       main.innerHTML = `<div class="page-title"><h1>Finanzas</h1><div class="actions"><button id="xls">Exportar a Excel</button></div></div>${tabsFin('/finanzas/resultados')}
         <div class="row" style="margin-bottom:12px"><button class="sm" id="ant">‹</button><input type="month" id="mes" value="${mes}" max="${hoyMes()}" style="width:auto"><button class="sm" id="sig" ${mes >= hoyMes() ? 'disabled' : ''}>›</button>
           <div class="tabs" style="margin:0 0 0 8px">${[[1, 'Mes actual'], [3, '3 meses'], [6, '6 meses'], [13, 'Actual + 12 anteriores']].map(([k, t]) => `<button data-n="${k}" class="${n === k ? 'on' : ''}">${t}</button>`).join('')}</div></div>
-        <p class="small muted">Siempre termina en el mes corriente o anterior (no hay meses futuros: para eso está el Presupuesto 12 meses). Tocá Ingresos, Costos o Gastos para ver de qué están hechos; debajo de cada importe está su peso sobre los ingresos. Importes en pesos.</p>
+        <p class="small muted">Siempre termina en el mes corriente o anterior (no hay meses futuros: para eso está el Presupuesto 12 meses). Tocá Ingresos, Costos o Gastos para ver de qué están hechos; debajo de cada importe está su peso sobre los ingresos Plan Full (todas las relaciones se calculan sobre ellos; el ingreso neto es el Plan Full menos los descuentos otorgados). Importes en pesos.</p>
         <div class="tablewrap"><table class="er-tabla ${muchas ? 'muchas' : ''}" style="min-width:${muchas ? 0 : 190 + C.length * 74}px"><thead><tr><th>Concepto</th>${C.map(c => `<th class="num nosort" style="text-transform:capitalize">${MC(c.mes)}</th>`).join('')}</tr></thead><tbody>
           ${filas.map(f => `<tr class="${f.cat ? 'er-cat' : f.det ? 'er-det' : 'er-tot'}" ${f.cat ? `data-cat="${f.id}"` : ''}><td ${f.det ? 'style="padding-left:18px"' : ''}>${f.cat ? `<b>${abiertas.has(f.id) ? '▾' : '▸'} ${esc(f.t)}</b>` : esc(f.t)}</td>${C.map(c => { const v = f.v(c), p = f.p ? f.p(c) : null; return `<td class="num ${f.tot && v < 0 ? 't-rojo' : ''}">${f.ent ? v : num(v)}${p != null ? `<div class="pcj">${pc(p)}</div>` : ''}</td>`; }).join('')}</tr>`).join('')}
         </tbody></table></div>

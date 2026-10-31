@@ -181,5 +181,47 @@ function aplicar(db) {
   add('leads', 'campana_id', 'INTEGER');
   add('leads', 'referido_id', 'INTEGER');                       // alumno que recomendó
   add('leads', 'notificado', 'INTEGER NOT NULL DEFAULT 0');
+  v7(db, add);
+}
+// Versión 7: descuentos, seguimiento de alumnos y de visitas, profesor de seguimiento en las rutinas
+function v7(db, add) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS descuentos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nombre TEXT NOT NULL,
+      tipo TEXT NOT NULL,
+      valor REAL NOT NULL,
+      meses INTEGER NOT NULL DEFAULT 1,
+      activo INTEGER NOT NULL DEFAULT 1,
+      creado TEXT
+    );
+    CREATE TABLE IF NOT EXISTS seg_semana (
+      cliente_id INTEGER NOT NULL,
+      semana TEXT NOT NULL,
+      sensacion INTEGER,
+      progreso INTEGER,
+      profesor_id INTEGER,
+      PRIMARY KEY (cliente_id, semana)
+    );
+    CREATE TABLE IF NOT EXISTS comentarios (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tipo TEXT NOT NULL,
+      ref_id INTEGER NOT NULL,
+      fecha TEXT NOT NULL,
+      texto TEXT NOT NULL,
+      autor_id INTEGER,
+      autor TEXT,
+      creado TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_comentarios ON comentarios(tipo, ref_id);
+  `);
+  add('clientes', 'desc_id', 'INTEGER');
+  add('clientes', 'desc_restantes', 'INTEGER NOT NULL DEFAULT 0');
+  add('pagos', 'plan_full', 'REAL');
+  add('pagos', 'descuento', 'REAL NOT NULL DEFAULT 0');
+  add('pagos', 'descuento_nombre', 'TEXT');
+  add('rutina_clientes', 'profesor_id', 'INTEGER');
+  add('leads', 'perdido_fecha', 'TEXT');
+  add('leads', 'motivo_perdido', 'TEXT');
 }
 module.exports = { aplicar };

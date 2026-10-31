@@ -267,6 +267,34 @@ function seedV6() {
     }
   });
 }
-if (sync.NODO !== 'nube') { seed(); seedV1(); seedV2(); seedV6(); }
+// Versión 7: biblioteca balanceada (mínimo 50 de movilidad y 50 de equilibrio, y ejercicios de cada patrón para cada capacidad y sistema energético)
+function seedV7() {
+  const { NUEVOS_V7 } = require('./seed-ejercicios-v7');
+  tx(() => {
+    if (getConfig('biblioteca_v7')) return;
+    const ya = new Set(all('SELECT nombre FROM ejercicios').map(r => r.nombre.toLowerCase()));
+    const eqOk = new Set(all('SELECT clave FROM equipamiento').map(r => r.clave));
+    for (const [clave, n, p2, p3, patron, cap, en, inten, eq] of NUEVOS_V7) {
+      if (ya.has(n.toLowerCase())) continue;
+      run("INSERT INTO ejercicios (zona, nombre, prog2, prog3, equipo, unidades, patron, origen, intensidad, capacidad, energia) VALUES (?,?,?,?,?,1,?,'base',?,?,?)",
+        est.zonaDeClave(clave), n, p2, p3, eqOk.has(eq) ? eq : 'ninguno', patron, inten, cap, en);
+    }
+    setConfig('biblioteca_v7', '1');
+  });
+  // Permisos nuevos de la V7 para los profesores que ya tenían una lista armada
+  tx(() => {
+    if (getConfig('permisos_v7')) return;
+    for (const u of all("SELECT id, permisos FROM usuarios WHERE rol = 'profesor' AND permisos IS NOT NULL AND permisos <> ''")) {
+      let l; try { l = JSON.parse(u.permisos); } catch (_) { continue; }
+      if (!Array.isArray(l)) continue;
+      const a = new Set(l);
+      if (a.has('plan.staff_editar') || a.has('plan.config')) a.add('plan.agenda');
+      if (a.has('cli.ver')) a.add('cli.seguimiento');
+      run('UPDATE usuarios SET permisos = ? WHERE id = ?', JSON.stringify([...a]), u.id);
+    }
+    setConfig('permisos_v7', '1');
+  });
+}
+if (sync.NODO !== 'nube') { seed(); seedV1(); seedV2(); seedV6(); seedV7(); }
 
 module.exports = { db, all, get, run, tx, getConfig, setConfig, DATA_DIR, DB_PATH, ZONAS, seedV1, seedV2, PAISES };

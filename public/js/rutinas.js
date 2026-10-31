@@ -7,7 +7,7 @@ const DIAS_RUT = [[1, 'Lunes'], [2, 'Martes'], [3, 'Miércoles'], [4, 'Jueves'],
 
 // Asignar una rutina a uno o varios clientes, repetida los días de la semana que se elijan
 async function asignarRutina(r, despues, clientePreset) {
-  const clientes = await api('GET', '/clientes');
+  const [clientes, profes] = await Promise.all([api('GET', '/clientes'), api('GET', '/profesores')]);
   const elegidos = new Map(clientePreset ? [[clientePreset.id, clientePreset.nombre]] : []);
   const m = modal('Asignar “' + r.nombre + '”', `<form id="f" class="stack">
     <div id="blq-cli">${campo('Cliente que la va a realizar', `<input id="q" placeholder="Buscar cliente por nombre…" autocomplete="off"><div id="res" class="small"></div>`)}<div id="chips" class="row" style="margin-top:6px"></div></div>
@@ -15,6 +15,7 @@ async function asignarRutina(r, despues, clientePreset) {
       <div class="row">${DIAS_RUT.map(([n, t]) => `<label class="btn sm" style="margin:0"><input type="checkbox" data-d="${n}"> ${t}</label>`).join('')}</div>
       <div class="row" style="margin-top:6px"><button type="button" class="ghost sm" id="d-todos">Todos los días</button><button type="button" class="ghost sm" id="d-ninguno">Ninguno</button></div>
       <div class="small muted" style="margin-top:4px">Marcá uno o varios: por ejemplo todos los lunes y todos los jueves.</div></div>
+    ${campo('Profesor de seguimiento (opcional)', `<select id="prof-seg"><option value="">Sin profesor asignado</option>${profes.map(p => `<option value="${p.id}" ${S.user.id === p.id ? 'selected' : ''}>${esc(p.nombre)}</option>`).join('')}</select>`)}
     <div class="row" style="justify-content:flex-end"><button type="button" data-close>Cancelar</button><button class="primary">Asignar</button></div></form>`);
   const chips = () => { $('#chips', m).innerHTML = [...elegidos].map(([id, n]) => `<span class="pill">${esc(n)} <button type="button" class="ghost sm" data-x="${id}" style="padding:0 6px">✕</button></span>`).join('') || '<span class="muted small">Todavía no elegiste ningún cliente.</span>'; $$('[data-x]', m).forEach(b => b.onclick = () => { elegidos.delete(Number(b.dataset.x)); chips(); }); };
   chips();
@@ -32,7 +33,7 @@ async function asignarRutina(r, despues, clientePreset) {
     const dias = $$('[data-d]', m).filter(c => c.checked).map(c => Number(c.dataset.d));
     if (!elegidos.size) return toast('Elegí al menos un cliente', 'warn');
     if (!dias.length) return toast('Marcá al menos un día de la semana', 'warn');
-    try { await api('POST', '/rutinas/asignar', { rutina_id: r.id, cliente_ids: [...elegidos.keys()], dias }); m.close(); toast('Rutina asignada'); despues(); } catch (er) { fail(er); }
+    try { await api('POST', '/rutinas/asignar', { rutina_id: r.id, cliente_ids: [...elegidos.keys()], dias, profesor_id: $('#prof-seg', m).value ? Number($('#prof-seg', m).value) : null }); m.close(); toast('Rutina asignada'); despues(); } catch (er) { fail(er); }
   };
 }
 
@@ -43,7 +44,7 @@ vista('/planificacion/rutinas', ['admin', 'profesor'], async (main) => {
     <div class="grid c2">
       <div class="card"><h3>Mis rutinas (${lista.length})</h3>${lista.length ? lista.map(r => `<div class="list-item"><div class="grow"><b>${esc(r.nombre)}</b><div class="small muted">${r.ejercicios} ejercicios · ≈ ${r.duracion_min} min${r.descripcion ? ' · ' + esc(r.descripcion) : ''}</div></div>
         ${puede('plan.rutinas_editar') ? `<button class="sm" data-as="${r.id}">Asignar a un cliente</button><button class="sm" data-ed="${r.id}">Editar</button><button class="danger sm" data-el="${r.id}">✕</button>` : ''}</div>`).join('') : '<div class="empty">Todavía no hay rutinas. Creá la primera.</div>'}</div>
-      <div class="card"><h3>Rutinas asignadas (${asig.length})</h3>${asig.length ? asig.map(a => `<div class="list-item"><div class="grow"><a href="#/clientes/${a.cliente_id}"><b>${esc(a.cliente)}</b></a><div class="small muted">${esc(a.rutina)} · ${esc(a.dias_txt)}</div></div>${puede('plan.rutinas_editar') ? `<button class="ghost sm" data-q="${a.id}">Quitar</button>` : ''}</div>`).join('') : '<div class="muted small">Nada asignado todavía.</div>'}</div></div>`;
+      <div class="card"><h3>Rutinas asignadas (${asig.length})</h3>${asig.length ? asig.map(a => `<div class="list-item"><div class="grow"><a href="#/clientes/${a.cliente_id}"><b>${esc(a.cliente)}</b></a><div class="small muted">${esc(a.rutina)} · ${esc(a.dias_txt)}</div><div class="small">${a.profesor ? 'Seguimiento: <b>' + esc(a.profesor) + '</b>' : '<span class="muted">Sin profesor de seguimiento</span>'}</div></div>${puede('plan.rutinas_editar') ? `<button class="ghost sm" data-q="${a.id}">Quitar</button>` : ''}</div>`).join('') : '<div class="muted small">Nada asignado todavía.</div>'}</div></div>`;
   const bnr = $('#nueva', main); if (bnr) bnr.onclick = () => formRutina(null);
   $$('[data-ed]', main).forEach(b => b.onclick = async () => { try { formRutina(await api('GET', '/rutinas/' + b.dataset.ed)); } catch (e) { fail(e); } });
   $$('[data-el]', main).forEach(b => b.onclick = async () => { if (!(await confirmar('¿Eliminar esta rutina? También se saca de los clientes que la tienen asignada.', 'Eliminar', true))) return; try { await api('DELETE', '/rutinas/' + b.dataset.el); render(); } catch (e) { fail(e); } });

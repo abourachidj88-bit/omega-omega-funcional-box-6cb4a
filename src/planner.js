@@ -23,7 +23,6 @@ function patronesDelDia(fecha, f, avisos) {
   if (2 * k > 3 * N) {
     const w = Math.floor(Date.parse(semana.lunesDeFecha(fecha)) / (7 * 86400000)) % k;   // si no entran, la semana rota cuáles quedan afuera
     permitidos = permitidos.slice(w).concat(permitidos.slice(0, w));
-    if (avisos) avisos.push('con ' + N + ' estaciones no entran todos los patrones elegidos dos veces por semana: esta semana quedan algunos con una sola vez. Subí las estaciones o sacá patrones del formato.');
   }
   const dias = [[], [], []];
   permitidos.forEach((p, j) => { for (const d of [j % 3, (j + 1) % 3]) dias[d].push(p); });
@@ -125,10 +124,10 @@ function construirCircuito(fecha, formatoId) {
     const libre = (e) => !usadoFormato.has(e.id) && !usadoSemana.has(e.id);
     const etapas = [
       { f: e => encaja(e) && dura(e) && libre(e) && prueba(e) },
-      { f: e => encaja(e) && libre(e) && prueba(e), aviso: minInt ? 'hay pocos ejercicios de intensidad ' + formato.intensidad_min + ' o más en ' + zona : null },
-      { f: e => libre(e) && prueba(e), aviso: 'no hay ejercicios nuevos de ' + zona + ' con las capacidades y el sistema energético elegidos para el formato: se usa otro' },
-      { f: e => !usadoFormato.has(e.id) && prueba(e), aviso: 'repite un ejercicio usado esta semana en otro formato (' + zona + ')' },
-      { f: e => prueba(e), aviso: 'no hay suficientes ejercicios nuevos para ' + zona + ': se repite uno antes de las 3 semanas. Cargá más ejercicios a este patrón.' },
+      { f: e => encaja(e) && libre(e) && prueba(e) },
+      { f: e => libre(e) && prueba(e) },
+      { f: e => !usadoFormato.has(e.id) && prueba(e) },
+      { f: e => prueba(e) },
       { f: () => true, aviso: 'el equipamiento no alcanza para ' + zona + ' con ' + porEstacion + ' personas por estación' },
     ];
     let elegido = null;

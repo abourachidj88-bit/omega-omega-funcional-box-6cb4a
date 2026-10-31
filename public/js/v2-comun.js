@@ -25,13 +25,13 @@ async function actualizarCampana() {
   } catch (_) {}
 }
 function abrirNotificaciones() {
-  api('GET', '/notificaciones?todas=1').then(r => {
+  Promise.all([api('GET', '/notificaciones?todas=1'), api('GET', '/descuentos').catch(() => [])]).then(([r, descs]) => {
     const m = modal('Avisos', `<div id="nl">${r.items.length ? r.items.map(n => `<div class="notif ${n.estado === 'pendiente' ? 'pend' : ''}">
       <div class="grow"><b>${esc(n.titulo)}</b><div class="small muted">${esc(n.detalle || '')}</div>
-        ${n.estado === 'pendiente' ? `<div class="row" style="margin-top:8px"><input data-r="${n.id}" placeholder="Qué decidiste (ej. 10% de descuento)" style="flex:1;min-width:180px"><button class="primary sm" data-ok="${n.id}">Resuelta</button>${n.cliente_id ? `<a class="btn sm" href="#/clientes/${n.cliente_id}" data-close>Ver alumno</a>` : ''}</div>`
+        ${n.estado === 'pendiente' ? `<div class="row" style="margin-top:8px">${n.cliente_id && descs.length ? `<select data-d="${n.id}" title="Descuento que se aplica solo en la próxima renovación del alumno"><option value="">Premio: elegir descuento…</option>${descs.map(d => `<option value="${d.id}">${esc(d.nombre)}</option>`).join('')}</select>` : ''}<input data-r="${n.id}" placeholder="Qué decidiste (ej. regalo, sin premio)" style="flex:1;min-width:160px"><button class="primary sm" data-ok="${n.id}">Resuelta</button>${n.cliente_id ? `<a class="btn sm" href="#/clientes/${n.cliente_id}" data-close>Ver alumno</a>` : ''}</div>`
           : `<div class="small t-verde" style="margin-top:4px">✓ ${esc(n.resolucion || 'Resuelta')}</div>`}</div></div>`).join('') : '<div class="empty">No hay avisos.</div>'}</div>`);
     $$('[data-ok]', m).forEach(b => b.onclick = async () => {
-      try { await api('PUT', '/notificaciones/' + b.dataset.ok, { resolucion: ($(`[data-r="${b.dataset.ok}"]`, m).value || '').trim() }); toast('Aviso resuelto'); m.close(); actualizarCampana(); abrirNotificaciones(); } catch (e) { fail(e); }
+      try { await api('PUT', '/notificaciones/' + b.dataset.ok, { resolucion: ($(`[data-r="${b.dataset.ok}"]`, m).value || '').trim(), descuento_id: Number(($(`[data-d="${b.dataset.ok}"]`, m) || {}).value) || undefined }); toast('Aviso resuelto'); m.close(); actualizarCampana(); abrirNotificaciones(); } catch (e) { fail(e); }
     });
   }).catch(fail);
 }

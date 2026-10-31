@@ -2,6 +2,18 @@
 
 Cada modificación que se pide genera una **versión nueva** (1, 2, 3…) a partir de la anterior. Las versiones anteriores quedan guardadas intactas en `OMEGA-versiones/Version-N/` (código fuente, instalador y versión de prueba). Los datos del gimnasio (`C:\OMEGA\datos`) se conservan al pasar de una versión a otra; antes de usar una versión nueva por primera vez OMEGA hace una copia de seguridad automática.
 
+## Versión 7 — 30/10/2026
+- **Biblioteca:** al menos 50 ejercicios de movilidad y 50 de equilibrio (hoy 56 y 96), con cobertura por patrón de movimiento y ejercicios anaeróbicos/potencia para todos los formatos. Los circuitos ya no muestran avisos por falta de ejercicios.
+- **Permisos:** nuevo permiso **Diseño** (el administrador lo tilda por profesor) y los profesores pueden modificar la agenda general y la Agenda Staff.
+- **Clientes → Seguimiento:** clases realizadas, clases más asistidas, días y horarios, sensación semanal del alumno (1–10), progreso semanal por profesores (1–10) y comentarios con fecha. **Corregido:** el premio por recomendación ahora se aplica al renovar el plan de quien recomendó.
+- **Asistencias:** botones Alumnos activos / Activos en riesgo / Bajas recuperables con listado; se quitó “ineficiencias en la asignación de materiales”; nueva pestaña **Seguimiento** (clases, profesores y horarios con más asistencia; no renovaciones vs mes anterior y vs promedio de 3 meses).
+- **CRM → Seguimiento:** visitas que no se inscribieron, con profesor, objetivo, fecha y comentarios; pasar a **Clientes perdidos** y reabrir. Cada profesor ve en su perfil a quién seguir.
+- **Rutinas personalizadas:** profesor de seguimiento; en su perfil, sus alumnos con entrenos y rutinas realizadas.
+- **Ajustes → Descuentos** (% o $, 1 a 12 meses) y en **Renovar plan**: Plan Full – Descuento – Ingreso neto.
+- **Finanzas:** Estado de resultados con Ingresos Plan Full, Descuentos otorgados e Ingreso neto; todos los porcentajes sobre Plan Full; el precio por alumno es el Plan Full.
+- **Hipervínculos a los listados:** los indicadores principales (Reporting, Asistencias del día y Seguimiento, CRM, Finanzas) abren el listado que los compone, con enlace a la ficha de cada alumno.
+- **Descuentos:** quien deja vencer el plan 7 días o más sin renovar pierde el descuento que le quedaba de varios meses. "Renovar plan" arranca en "Sin descuento" (o en el pendiente del alumno).
+
 ## Versión 6 — 30/10/2026
 Cambio de estructura del módulo **Planificación**. Pestañas, en este orden: **Agenda semanal · Agenda Staff · Formatos e Intervalos · Planificación Semanal · Rutinas Personalizadas · Biblioteca · Equipamiento**.
 - **Agenda semanal (primer paso de la semana):** la agenda de clases ahora es *por semana*, con un calendario de semanas (A = agenda guardada, F = formatos guardados, C = circuitos). Una semana sin agenda propia hereda la de la última semana guardada. Botón **“Copiar agenda semana anterior”**.

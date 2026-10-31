@@ -150,6 +150,7 @@ vista('/planificacion/formatos', ['admin', 'profesor'], async (main) => {
         <div class="row" style="flex-wrap:wrap;gap:8px;margin:10px 0">
           <label class="row small" style="gap:6px;margin:0"><input type="checkbox" data-st="${i}" ${sinT(f) ? 'checked' : ''} ${adm ? '' : 'disabled'}> Sin intervalos (clase corrida)</label>
           ${sinT(f) ? `<span class="small muted">Duración</span><input type="number" min="1" max="600" data-dm="${i}" value="${f.duracion_min ?? 60}" style="width:76px" ${adm ? '' : 'disabled'}><span class="small muted">min</span>` : `${tiempo(f, i, 'trabajo_seg', false, 'Trabajo')}<label class="row small" style="gap:6px;margin:0 0 0 8px"><input type="checkbox" data-sd="${i}" ${f.sin_descanso ? 'checked' : ''} ${adm ? '' : 'disabled'}> Sin descanso</label>${tiempo(f, i, 'descanso_seg', !!f.sin_descanso, 'Descanso')}`}</div>
+        ${2 * (f.patrones || []).length > 3 * (f.estaciones || 0) ? `<div class="infobox small" style="margin-bottom:8px">Con ${f.estaciones} estaciones no entran los ${(f.patrones || []).length} patrones elegidos dos veces por semana: se van rotando entre semanas. Subí las estaciones o sacá patrones.</div>` : ''}
         <div class="grid c3">${GRUPOS_EST.map(([g, titulo]) => `<div><div class="small" style="margin-bottom:4px"><b>${titulo}</b></div>${est[g].map(o => `<label class="row small" style="gap:6px;margin:0 0 3px;align-items:flex-start" title="${esc(o.ejemplo || '')}"><input type="checkbox" data-g="${g}" data-i="${i}" value="${o.clave}" ${(f[g] || []).includes(o.clave) ? 'checked' : ''} ${adm ? '' : 'disabled'}> <span>${esc(o.nombre)}</span></label>`).join('')}</div>`).join('')}</div>
       </div>`).join('')}
       <p class="small muted">Elegí 1 o varios estímulos en cada uno de los tres grupos. La IA arma los circuitos de cada clase con las estaciones y los estímulos de su formato.</p>`;
@@ -247,7 +248,7 @@ function editarFormatos(fm, modo, despues) {
 
 // ---------- Agenda semanal: qué formato se da en cada horario (es el primer paso de la planificación de la semana) ----------
 vista('/planificacion', ['admin', 'profesor'], async (main) => {
-  const adm = puede('plan.config');
+  const adm = puede('plan.agenda');
   async function cargar() {
     const desde = semanaSel();
     const [ag, fm, barra] = await Promise.all([api('GET', '/agenda-semanal?semana=' + desde), api('GET', '/formatos'), barraSemana(desde)]);
@@ -256,7 +257,7 @@ vista('/planificacion', ['admin', 'profesor'], async (main) => {
     const opts = (sel) => '<option value="">—</option>' + fm.map(f => `<option value="${f.id}" ${sel === f.id ? 'selected' : ''}>${esc(f.nombre)}</option>`).join('');
     main.innerHTML = `<div class="page-title"><h1>Agenda semanal</h1><div class="actions">${adm ? '<button id="copiar">Copiar agenda semana anterior</button><button class="primary" id="ok">Guardar agenda de la semana</button>' : ''}</div></div>${tabsPlan('/planificacion')}
       ${barra}
-      <div class="${ag.origen === 'propia' ? 'okbox' : 'infobox'}" style="margin-bottom:10px">Agenda ${ORIGEN_TXT[ag.origen]}${ag.origen === 'heredada' ? ' (' + fmtF(ag.desde) + ')' : ''}. ${adm ? 'Es el primer paso de la planificación: cada cambio que guardes actualiza la semana, el Staff y la app de los clientes.' : 'Solo el administrador puede modificarla.'}</div>
+      <div class="${ag.origen === 'propia' ? 'okbox' : 'infobox'}" style="margin-bottom:10px">Agenda ${ORIGEN_TXT[ag.origen]}${ag.origen === 'heredada' ? ' (' + fmtF(ag.desde) + ')' : ''}. ${adm ? 'Es el primer paso de la planificación: cada cambio que guardes actualiza la semana, el Staff y la app de los clientes.' : 'No tenés permiso para modificarla.'}</div>
       <div class="tablewrap" style="padding:10px"><div class="agenda"><div></div>${DIAS_CORTO.slice(1).map((d, i) => `<div class="h">${d} ${sumaDias(desde, i).slice(8)}</div>`).join('')}
         ${horas.map(h => `<div class="h">${hh(h)}</div>${[1, 2, 3, 4, 5, 6, 7].map(d => `<select data-d="${d}" data-h="${h}" ${adm ? '' : 'disabled'}>${opts(cel.get(d + '-' + h) ?? null)}</select>`).join('')}`).join('')}</div></div>
       <p class="small muted" style="margin-top:10px">Siguiente paso: <a href="#/planificacion/staff">Agenda Staff</a> (elegir el profesor de cada clase) → <a href="#/planificacion/formatos">Formatos e Intervalos</a> → <a href="#/planificacion/semana">Planificación Semanal</a>.</p>`;
@@ -303,7 +304,7 @@ vista('/planificacion/equipos', ['admin', 'profesor'], async (main) => {
 
 // ---------- Agenda Staff: qué profesor tiene cada clase de la semana (después de actualizar la agenda semanal) ----------
 vista('/planificacion/staff', ['admin', 'profesor'], async (main) => {
-  const adm = puede('plan.staff_editar');
+  const adm = puede('plan.agenda|plan.staff_editar');
   async function cargar() {
     const desde = semanaSel();
     const [ag, mis, as, barra] = await Promise.all([api('GET', '/staff/agenda?desde=' + desde), adm ? Promise.resolve(null) : api('GET', '/staff/mis-turnos'), api('GET', '/agenda-semanal?semana=' + desde), barraSemana(desde)]);

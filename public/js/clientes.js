@@ -185,7 +185,7 @@ vista('/clientes/:id', ['admin', 'profesor'], async (main, { id }) => {
       <div class="kpi"><div class="l">Última clase</div><div class="v" style="font-size:1rem">${fmtUltima(c.ultima_clase)}</div></div>
       <div class="kpi"><div class="l">Cumplimiento (${c.objetivo_semanal} por semana)</div><div class="v">${c.cumplimiento_objetivo}%</div></div>
     </div>
-    <div class="tabs"><button data-t="alta" class="on">Alta</button><button data-t="asist">Asistencias</button><button data-t="rut">Rutinas</button></div>
+    <div class="tabs"><button data-t="alta" class="on">Alta</button><button data-t="asist">Asistencias</button><button data-t="rut">Rutinas</button><button data-t="seg">Seguimiento</button></div>
     <div id="tab"></div>`;
   const tab = $('#tab', main);
   function verAlta() {
@@ -193,7 +193,7 @@ vista('/clientes/:id', ['admin', 'profesor'], async (main, { id }) => {
     formAlta(card, c).catch(fail);
     if (c.pagos && c.pagos.length) {
       const p = document.createElement('div'); p.className = 'card';
-      p.innerHTML = `<h3>Pagos registrados</h3><div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Concepto</th><th>Medio</th><th>Cubre hasta</th><th class="num">Monto</th><th></th></tr></thead><tbody>${c.pagos.map(x => `<tr style="cursor:default"><td>${fmtF(x.fecha)}</td><td>${esc(x.concepto || '')}</td><td>${x.metodo === 'efectivo' ? 'Efectivo' : x.metodo === 'mercadopago' ? 'Mercado Pago' : '—'}</td><td>${fmtF(x.cubre_hasta)}</td><td class="num">${money(x.monto)}</td><td class="right">${puede('cli.deshacer_pago') ? `<button class="danger sm" data-undo="${x.id}" title="Anula el pago, retrocede la fecha de baja y quita el ingreso">Deshacer pago</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
+      p.innerHTML = `<h3>Pagos registrados</h3><div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Concepto</th><th>Medio</th><th>Cubre hasta</th><th class="num">Ingreso neto</th><th></th></tr></thead><tbody>${c.pagos.map(x => `<tr style="cursor:default"><td>${fmtF(x.fecha)}</td><td>${esc(x.concepto || '')}</td><td>${x.metodo === 'efectivo' ? 'Efectivo' : x.metodo === 'mercadopago' ? 'Mercado Pago' : '—'}</td><td>${fmtF(x.cubre_hasta)}</td><td class="num">${money(x.monto)}${x.descuento ? `<div class="small muted">Plan Full ${money(x.plan_full)} − desc. ${money(x.descuento)}</div>` : ''}</td><td class="right">${puede('cli.deshacer_pago') ? `<button class="danger sm" data-undo="${x.id}" title="Anula el pago, retrocede la fecha de baja y quita el ingreso">Deshacer pago</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
       tab.appendChild(p);
       $$('[data-undo]', p).forEach(b => b.onclick = async () => {
         if (!(await confirmar('Se anula este pago: la fecha de baja vuelve atrás y el ingreso se quita de la Caja (efectivo) o del reporte (Mercado Pago). ¿Seguimos?', 'Deshacer pago', true))) return;
@@ -206,13 +206,43 @@ vista('/clientes/:id', ['admin', 'profesor'], async (main, { id }) => {
     let asig = [], rutinas = [];
     try { [asig, rutinas] = await Promise.all([api('GET', '/rutinas/asignaciones?cliente_id=' + c.id), api('GET', '/rutinas')]); } catch (e) { return fail(e); }
     tab.innerHTML = `<div class="card"><div class="row between"><h3 style="margin:0">Rutinas de ${esc(c.nombre.split(' ')[0])}</h3>${!puede('plan.rutinas_editar') ? '' : rutinas.length ? '<button class="primary sm" id="r-as">＋ Asignar rutina</button>' : '<a class="btn sm" href="#/planificacion/rutinas">Crear una rutina</a>'}</div>
-      ${asig.length ? asig.map(a => `<div class="list-item"><div class="grow"><b>${esc(a.rutina)}</b><div class="small muted">${esc(a.dias_txt)} · ≈ ${a.duracion_min} min</div></div><button class="sm" data-v="${a.rutina_id}">Ver</button>${puede('plan.rutinas_editar') ? `<button class="ghost sm" data-q="${a.id}">Quitar</button>` : ''}</div>`).join('') : '<div class="muted" style="margin-top:8px">Este cliente todavía no tiene rutinas asignadas.</div>'}</div>`;
+      ${asig.length ? asig.map(a => `<div class="list-item"><div class="grow"><b>${esc(a.rutina)}</b><div class="small muted">${esc(a.dias_txt)} · ≈ ${a.duracion_min} min</div><div class="small">${a.profesor ? 'Seguimiento: <b>' + esc(a.profesor) + '</b>' : '<span class="muted">Sin profesor de seguimiento</span>'}</div></div><button class="sm" data-v="${a.rutina_id}">Ver</button>${puede('plan.rutinas_editar') ? `<button class="ghost sm" data-q="${a.id}">Quitar</button>` : ''}</div>`).join('') : '<div class="muted" style="margin-top:8px">Este cliente todavía no tiene rutinas asignadas.</div>'}</div>`;
     const as = $('#r-as', tab); if (as) as.onclick = () => {
       const m = modal('Elegir rutina', rutinas.map(r => `<div class="list-item" data-r="${r.id}" style="cursor:pointer"><div class="grow"><b>${esc(r.nombre)}</b><div class="small muted">${r.ejercicios} ejercicios · ≈ ${r.duracion_min} min</div></div><span class="pill">Elegir ›</span></div>`).join(''));
       $$('[data-r]', m).forEach(el => el.onclick = () => { m.close(); asignarRutina(rutinas.find(x => x.id === Number(el.dataset.r)), verRut, { id: c.id, nombre: c.nombre }).catch(fail); });
     };
     $$('[data-q]', tab).forEach(b => b.onclick = async () => { try { await api('DELETE', '/rutinas/asignaciones/' + b.dataset.q); verRut(); } catch (e) { fail(e); } });
     $$('[data-v]', tab).forEach(b => b.onclick = async () => { try { const r = await api('GET', '/rutinas/' + b.dataset.v); modal(r.nombre, rutinaHtml(r)); } catch (e) { fail(e); } });
+  }
+  // ---- Seguimiento del alumno
+  async function verSeg() {
+    tab.innerHTML = '<div class="card"><div class="empty"><span class="spinner"></span></div></div>';
+    let d; try { d = await api('GET', '/clientes/' + c.id + '/seguimiento'); } catch (e) { return fail(e); }
+    const edita = puede('cli.seguimiento'), maxC = Math.max(1, ...d.por_clase.map(x => x.n));
+    const notaTxt = (v) => v == null ? '<span class="muted">sin cargar</span>' : `<b class="${v >= 8 ? 't-verde' : v >= 5 ? 't-amarillo' : 't-rojo'}">${v}/10</b>`;
+    const sa = d.semana_actual;
+    tab.innerHTML = `
+      <div class="grid k" style="margin-bottom:14px"><div class="kpi"><div class="v">${d.clases}</div><div class="l">1 · Clases que realizó</div></div>
+        <div class="kpi"><div class="v">${d.rutinas}</div><div class="l">Entrenamientos con rutina</div></div>
+        <div class="kpi"><div class="v" style="font-size:1.3rem">${notaTxt(sa.sensacion)}</div><div class="l">4 · Cómo se siente esta semana (él/ella)</div></div>
+        <div class="kpi"><div class="v" style="font-size:1.3rem">${notaTxt(sa.progreso)}</div><div class="l">5 · Progreso esta semana (profesores)</div></div></div>
+      <div class="grid c2">
+        <div class="card"><h3>2 · Clases a las que más asistió</h3>${d.por_clase.length ? d.por_clase.map(x => `<div class="row" style="margin-bottom:6px;flex-wrap:nowrap">${chipFormato(x.clase === 'Sin formato' ? null : { nombre: x.clase, color: x.color })}<div class="grow"><div class="meter"><i style="width:${Math.round(100 * x.n / maxC)}%"></i></div></div><b>${x.n}</b></div>`).join('') : '<div class="empty">Todavía no asistió a ninguna clase.</div>'}</div>
+        <div class="card"><h3>3 · Días y horarios a los que más asistió</h3>${d.dias_horarios.length ? `<div class="small muted" style="margin-bottom:6px">Combinaciones más frecuentes</div>${d.dias_horarios.map((x, i) => `<div class="list-item"><div class="grow">${i === 0 ? '🏆 ' : ''}<b>${x.dia} ${hh(x.hora)}</b></div><span class="pill">${x.n} ${x.n === 1 ? 'vez' : 'veces'}</span></div>`).join('')}
+          <div class="small muted" style="margin:8px 0 4px">Por día: ${d.por_dia.map(x => esc(x.dia) + ' (' + x.n + ')').join(' · ')}</div>` : '<div class="empty">Sin datos todavía.</div>'}</div></div>
+      <div class="card" style="margin-top:14px"><h3>5 · Progreso semanal (calificación de los profesores)</h3>
+        ${edita ? `<div class="row" style="margin-bottom:8px;flex-wrap:wrap"><span class="small muted">Semana del ${fmtF(sa.semana)}:</span>${Array.from({ length: 10 }, (_, i) => `<button class="sm ${sa.progreso === i + 1 ? 'primary' : ''}" data-pr="${i + 1}">${i + 1}</button>`).join('')}</div>` : ''}
+        ${d.semanas.length ? `<div class="tablewrap"><table><thead><tr><th>Semana</th><th class="num">Se siente (alumno)</th><th class="num">Progreso (profesor)</th><th>Cargó</th></tr></thead><tbody>${d.semanas.map(x => `<tr style="cursor:default"><td>${fmtF(x.semana)}</td><td class="num">${notaTxt(x.sensacion)}</td><td class="num">${notaTxt(x.progreso)}</td><td>${esc(x.profesor || '')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Todavía no hay calificaciones.</div>'}
+        <p class="small muted" style="margin-top:6px">La calificación “cómo se siente” la carga el propio alumno desde su celular una vez por semana.</p></div>
+      <div class="card" style="margin-top:14px"><h3>6 · Comentarios</h3>
+        ${edita ? `<div class="row" style="align-items:flex-end;margin-bottom:10px;flex-wrap:wrap"><div class="grow" style="min-width:220px"><textarea id="com-t" rows="2" maxlength="1000" placeholder="Lo que conversaste con el alumno…" style="width:100%"></textarea></div><input type="date" id="com-f" value="${hoyAR()}" style="width:auto"><button class="primary" id="com-ok">Agregar comentario</button></div>` : ''}
+        ${d.comentarios.length ? d.comentarios.map(x => `<div class="list-item"><div class="grow"><div class="small muted">${fmtF(x.fecha)} · ${esc(x.autor || '')}</div>${esc(x.texto)}</div>${edita ? `<button class="ghost sm" data-dc="${x.id}">Quitar</button>` : ''}</div>`).join('') : '<div class="empty">Sin comentarios.</div>'}</div>`;
+    $$('[data-pr]', tab).forEach(b => b.onclick = async () => { try { await api('PUT', '/clientes/' + c.id + '/seguimiento', { progreso: Number(b.dataset.pr) }); verSeg(); } catch (e) { fail(e); } });
+    const ok = $('#com-ok', tab); if (ok) ok.onclick = async () => {
+      const t = $('#com-t', tab).value.trim(); if (!t) return toast('Escribí el comentario', 'warn');
+      try { await api('POST', '/comentarios', { tipo: 'cliente', ref_id: c.id, texto: t, fecha: $('#com-f', tab).value }); verSeg(); } catch (e) { fail(e); }
+    };
+    $$('[data-dc]', tab).forEach(b => b.onclick = async () => { try { await api('DELETE', '/comentarios/' + b.dataset.dc); verSeg(); } catch (e) { fail(e); } });
   }
   function verAsist() {
     const sem = c.semanas.map(s => ({ x: s.desde.slice(8, 10) + '/' + s.desde.slice(5, 7), v: s.asistencias, color: s.asistencias >= c.objetivo_semanal ? 'var(--verde)' : '' }));
@@ -228,7 +258,7 @@ vista('/clientes/:id', ['admin', 'profesor'], async (main, { id }) => {
       try { await api('DELETE', '/asistencias/' + b.dataset.del); toast('Asistencia quitada'); render(); } catch (e) { fail(e); }
     });
   }
-  $$('.tabs button', main).forEach(b => b.onclick = () => { $$('.tabs button', main).forEach(x => x.classList.toggle('on', x === b)); b.dataset.t === 'alta' ? verAlta() : b.dataset.t === 'rut' ? verRut() : verAsist(); });
+  $$('.tabs button', main).forEach(b => b.onclick = () => { $$('.tabs button', main).forEach(x => x.classList.toggle('on', x === b)); b.dataset.t === 'alta' ? verAlta() : b.dataset.t === 'rut' ? verRut() : b.dataset.t === 'seg' ? verSeg() : verAsist(); });
   verAlta();
   if (S.accesoNuevo && S.accesoNuevo.id === c.id) { const a = S.accesoNuevo; S.accesoNuevo = null; mostrarAcceso(a.acceso, a.nombre); }
 
@@ -239,24 +269,38 @@ vista('/clientes/:id', ['admin', 'profesor'], async (main, { id }) => {
   };
   {
     const bren = $('#b-renovar', main); if (bren) bren.onclick = async () => {
-      let planes = []; try { planes = await api('GET', '/planes'); } catch (_) {}
-      const plan = planes.find(p => p.id === c.plan_id) || null;
+      let planes = [], descs = []; try { [planes, descs] = await Promise.all([api('GET', '/planes'), api('GET', '/descuentos')]); } catch (_) {}
+      const plan = planes.find(p => p.id === c.plan_id) || null, pend = c.descuento_pendiente || null;
+      const optD = '<option value="">Sin descuento</option>' + descs.map(d => `<option value="${d.id}" ${pend && pend.id === d.id ? 'selected' : ''}>${esc(d.nombre)}${pend && pend.id === d.id ? ' · pendiente del alumno (' + pend.restantes + (pend.restantes === 1 ? ' mes' : ' meses') + ')' : ''}</option>`).join('');
       const m = modal('Renovar plan', `<p>Se registra el pago y la baja se corre <b>1 mes</b> (o más) desde ${activo ? 'la fecha de vencimiento actual' : 'hoy'}.</p>
         <div class="fgrid">${campo('Meses', '<select id="meses">' + [1, 2, 3, 6, 12].map(n => `<option value="${n}">${n} ${n === 1 ? 'mes' : 'meses'}</option>`).join('') + '</select>')}
         ${campo('Método de pago *', `<select id="metodo"><option value="">Elegí cómo pagó…</option><option value="efectivo">Efectivo</option><option value="mercadopago">Mercado Pago</option></select>`)}
-        ${campo('Monto cobrado ($)', `<input id="monto" type="number" min="0" value="${c.precio_plan || 0}">`)}</div>
+        ${campo('Descuento a aplicar', `<select id="desc" ${descs.length || pend ? '' : 'disabled'}>${optD}</select>`)}</div>
+        ${pend && !descs.some(d => d.id === pend.id) ? '<div class="small t-amarillo">El descuento pendiente del alumno ya no está en la lista de descuentos activos.</div>' : ''}
+        <div class="grid k" style="margin:10px 0"><div class="kpi"><div class="l">Plan Full</div><div class="v" id="r-full">—</div></div><div class="kpi amarillo"><div class="l">Descuento</div><div class="v" id="r-desc">—</div><div class="small muted" id="r-dn"></div></div><div class="kpi verde"><div class="l">Ingreso neto</div><div class="v" id="r-neto">—</div></div></div>
         <div class="small muted" id="nota">Elegí el método de pago para continuar.</div>
         <div class="row" style="justify-content:flex-end;margin-top:10px"><button data-close>Cancelar</button><button class="primary" id="ok" disabled>Registrar renovación</button></div>`);
+      let calc = { full: 0, desc: 0, neto: 0 };
       const pm = () => {
         const met = $('#metodo', m).value, meses = Number($('#meses', m).value);
         const unit = plan ? (met === 'mercadopago' ? plan.precio_mp : plan.precio_efectivo) : (c.precio_plan || 0);
-        $('#monto', m).value = Math.round(unit * meses);
+        const d = descs.find(x => String(x.id) === $('#desc', m).value) || null;
+        const restan = d ? (pend && pend.id === d.id ? pend.restantes : d.meses) : 0;
+        const k = d ? Math.min(meses, restan) : 0, porMes = d ? Math.min(unit, d.tipo === 'pct' ? unit * d.valor / 100 : d.valor) : 0;
+        const full = Math.round(unit * meses), desc = Math.round(porMes * k);
+        calc = { full, desc, neto: Math.max(0, full - desc) };
+        $('#r-full', m).textContent = money(full); $('#r-desc', m).textContent = desc ? '− ' + money(desc) : money(0); $('#r-neto', m).textContent = money(calc.neto);
+        $('#r-dn', m).textContent = d ? (k < meses ? 'aplica a ' + k + (k === 1 ? ' mes' : ' meses') + ' de ' + meses : esc(d.nombre)) : '';
         $('#ok', m).disabled = !met;
-        $('#nota', m).innerHTML = !met ? 'Elegí el método de pago para continuar.' : met === 'efectivo' ? '💵 El monto entra a la <b>Caja</b> de hoy como ingreso.' : '📱 Solo se actualiza la ficha del alumno: el dinero ya está en Mercado Pago.';
+        $('#nota', m).innerHTML = !met ? 'Elegí el método de pago para continuar.' : met === 'efectivo' ? '💵 El ingreso neto entra a la <b>Caja</b> de hoy.' : '📱 Solo se actualiza la ficha del alumno: el dinero ya está en Mercado Pago.';
       };
-      $('#meses', m).onchange = pm; $('#metodo', m).onchange = pm;
+      $('#meses', m).onchange = pm; $('#metodo', m).onchange = pm; $('#desc', m).onchange = pm; pm();
       $('#ok', m).onclick = async () => {
-        try { const r = await api('POST', '/clientes/' + c.id + '/renovar', { meses: $('#meses', m).value, monto: $('#monto', m).value, metodo_pago: $('#metodo', m).value }); m.close(); toast('Renovado. Nueva baja: ' + fmtF(r.fecha_baja) + (r.a_caja ? ' · sumado a la caja' : '')); render(); } catch (e) { fail(e); }
+        try {
+          const body = { meses: $('#meses', m).value, metodo_pago: $('#metodo', m).value, descuento_id: $('#desc', m).value ? Number($('#desc', m).value) : null };
+          const r = await api('POST', '/clientes/' + c.id + '/renovar', body); m.close();
+          toast('Renovado. Nueva baja: ' + fmtF(r.fecha_baja) + (r.descuento ? ' · descuento ' + money(r.descuento) : '') + (r.a_caja ? ' · sumado a la caja' : '')); render();
+        } catch (e) { fail(e); }
       };
     };
     const bdel = $('#b-del', main); if (bdel) bdel.onclick = async () => {

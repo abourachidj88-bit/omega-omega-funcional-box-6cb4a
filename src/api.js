@@ -90,7 +90,7 @@ function detalleCliente(id, user) {
   const out = { ...base, asistencias: asist, semanas, mensual, cumplimiento_objetivo: cumpl, objetivo_semanal: 3 };
   const u = get('SELECT username FROM usuarios WHERE cliente_id = ?', id);
   out.usuario = u ? u.username : null;
-  if (user.rol === 'admin' || user.rol === 'profesor') { out.precio_plan = c.precio_plan; out.pagos = all('SELECT id, fecha, monto, concepto, cubre_hasta, metodo, meses FROM pagos WHERE cliente_id = ? ORDER BY fecha DESC, id DESC', id); out.plan_id = c.plan_id || null; }
+  if (user.rol === 'admin' || user.rol === 'profesor') { const dp = c.desc_id && c.desc_restantes > 0 ? get('SELECT id, nombre, tipo, valor, meses FROM descuentos WHERE id = ?', c.desc_id) : null; out.descuento_pendiente = dp ? { ...dp, restantes: c.desc_restantes } : null; out.precio_plan = c.precio_plan; out.pagos = all('SELECT id, fecha, monto, plan_full, descuento, descuento_nombre, concepto, cubre_hasta, metodo, meses FROM pagos WHERE cliente_id = ? ORDER BY fecha DESC, id DESC', id); out.plan_id = c.plan_id || null; }
   return out;
 }
 const CLAVE_INICIAL = '12345678';
@@ -175,7 +175,7 @@ const NOMBRE_METODO = { efectivo: 'Efectivo', mercadopago: 'Mercado Pago' };
 function registrarPago(clienteId, nombreCliente, monto, metodo, concepto, fecha, cubreHasta, planId, extra = {}) {
   const antes = get('SELECT falta_pago FROM clientes WHERE id = ?', clienteId);
   const p = run('INSERT INTO pagos (cliente_id, fecha, monto, concepto, cubre_hasta, metodo, plan_id, meses, baja_anterior) VALUES (?,?,?,?,?,?,?,?,?)', clienteId, fecha, monto, concepto, cubreHasta, metodo, planId || null, extra.meses || null, extra.bajaAnterior || null);
-  run('UPDATE pagos SET falta_antes = ? WHERE id = ?', antes && antes.falta_pago ? 1 : 0, Number(p.lastInsertRowid));
+  run('UPDATE pagos SET falta_antes = ?, plan_full = ?, descuento = ?, descuento_nombre = ? WHERE id = ?', antes && antes.falta_pago ? 1 : 0, extra.planFull != null ? extra.planFull : monto, extra.descuento || 0, extra.descuentoNombre || null, Number(p.lastInsertRowid));
   run('UPDATE clientes SET falta_pago = 0 WHERE id = ?', clienteId);
   v2.alRegistrarPago(clienteId);
   run('INSERT INTO finanzas (tipo, categoria, concepto, monto, fecha, fijo, pago_id, medio, en_caja) VALUES (?,?,?,?,?,0,?,?,?)',
@@ -193,12 +193,36 @@ function renovarCliente(id, b) {
   const metodo = validarMetodo(b.metodo_pago);
   const plan = c.plan_id ? get('SELECT * FROM planes WHERE id = ?', c.plan_id) : null;
   const precioMes = plan ? (metodo === 'efectivo' ? plan.precio_efectivo : plan.precio_mp) : c.precio_plan;
-  const monto = b.monto !== undefined && b.monto !== '' ? Math.max(0, num(b.monto)) : precioMes * meses;
+  // Descuento: el elegido en la renovación o, si no se elige otro, el que el alumno tiene pendiente (por ejemplo un premio por recomendar)
+  const manual = b.monto !== undefined && b.monto !== '';
+  const planFull = manual ? Math.max(0, num(b.monto)) : precioMes * meses;
+  // Si el alumno dejó vencer el plan 7 días o más sin renovar, pierde el descuento que le quedaba de varios meses
+  if (c.desc_id && c.desc_restantes > 0 && baja < addDays(hoy, -7)) {
+    const dp = get('SELECT meses FROM descuentos WHERE id = ?', c.desc_id);
+    if (dp && dp.meses > 1) { run('UPDATE clientes SET desc_id = NULL, desc_restantes = 0 WHERE id = ?', id); c.desc_id = null; c.desc_restantes = 0; }
+  }
+  let d = null, restan = 0, deElegido = false;
+  if (!manual && b.descuento_id) {
+    d = get('SELECT * FROM descuentos WHERE id = ? AND activo = 1', Number(b.descuento_id));
+    if (!d) throw bad('El descuento elegido no existe');
+    restan = d.meses; deElegido = true;
+  } else if (!manual && b.descuento_id === undefined && c.desc_id && c.desc_restantes > 0) {
+    d = get('SELECT * FROM descuentos WHERE id = ?', c.desc_id); restan = c.desc_restantes;
+  }
+  const mesesCon = d ? Math.min(meses, restan) : 0;
+  const porMes = d ? Math.min(precioMes, d.tipo === 'pct' ? precioMes * d.valor / 100 : d.valor) : 0;
+  const descuento = Math.round(porMes * mesesCon);
+  const monto = Math.max(0, planFull - descuento);
   tx(() => {
     run('UPDATE clientes SET fecha_baja = ? WHERE id = ?', nueva, id);
-    registrarPago(id, c.nombre, monto, metodo, 'Renovación de plan (' + meses + ' mes' + (meses > 1 ? 'es' : '') + ')', hoy, nueva, c.plan_id, { meses, bajaAnterior: baja });
+    registrarPago(id, c.nombre, monto, metodo, 'Renovación de plan (' + meses + ' mes' + (meses > 1 ? 'es' : '') + ')' + (descuento ? ' · descuento ' + d.nombre : ''), hoy, nueva, c.plan_id,
+      { meses, bajaAnterior: baja, planFull, descuento, descuentoNombre: descuento ? d.nombre : null });
+    if (d && (deElegido || descuento)) {
+      const quedan = restan - mesesCon;
+      run('UPDATE clientes SET desc_id = ?, desc_restantes = ? WHERE id = ?', quedan > 0 ? d.id : null, Math.max(0, quedan), id);
+    }
   });
-  return { fecha_baja: nueva, monto, metodo_pago: metodo, a_caja: metodo === 'efectivo' };
+  return { fecha_baja: nueva, monto, plan_full: planFull, descuento, metodo_pago: metodo, a_caja: metodo === 'efectivo' };
 }
 
 // ------------------------------------------------------------ asistencias
@@ -251,17 +275,6 @@ function dashboard(fecha) {
     const rs = v2.reservasDeClase(fecha, h, f);
     return { hora: h, formato: f ? f.nombre : null, color: f ? f.color : null, total: qr + man, qr, manual: man, exceso: Math.max(0, qr + man - capacidad), reservas: rs.total, limite_reservas: rs.limite, exceso_reservas: rs.exceso };
   });
-  // ineficiencias de asignación de materiales: clases con más personas que la capacidad de diseño (últimos 30 días)
-  const desde = addDays(hoy, -30);
-  const exc = all(`SELECT a.fecha, a.hora, COUNT(*) AS n FROM asistencias a WHERE a.fecha BETWEEN ? AND ? AND a.origen <> 'rutina' GROUP BY a.fecha, a.hora HAVING n > ? ORDER BY a.fecha DESC, a.hora`, desde, hoy, capacidad);
-  const ineficiencias = exc.map(e => {
-    const s = get('SELECT * FROM sesiones WHERE fecha = ? AND hora = ?', e.fecha, e.hora);
-    const f = s && s.formato_id ? formatos.get(s.formato_id) : null;
-    const circ = f ? get('SELECT * FROM circuitos WHERE fecha = ? AND formato_id = ?', e.fecha, f.id) : null;
-    return { fecha: e.fecha, hora: e.hora, formato: f ? f.nombre : null, asistentes: e.n, exceso: e.n - capacidad, faltantes: planner.faltantesEquipo(circ, e.n) };
-  });
-  const porHorario = {};
-  for (const i of ineficiencias) { const k = String(i.hora); porHorario[k] = (porHorario[k] || 0) + 1; }
   const semanaAsist = [];
   for (let i = 13; i >= 0; i--) {
     const d = addDays(fecha, -i);
@@ -276,7 +289,15 @@ function dashboard(fecha) {
     asistencias_dia: porHora.reduce((a, h) => a + h.total, 0),
     rutinas_dia: get("SELECT COUNT(*) AS n FROM asistencias WHERE fecha = ? AND origen = 'rutina'", fecha).n,
   };
-  return { fecha, capacidad, porHora, semana: semanaAsist, kpis, ineficiencias, ineficiencias_por_horario: porHorario };
+  // listados detrás de cada indicador (botones Alumnos activos / Activos en riesgo / Bajas recuperables)
+  const fila = (c) => ({ id: c.id, nombre: c.nombre, ultima_clase: c.ultima_clase, fecha_baja: c.fecha_baja, total_asistencias: c.total_asistencias, semaforo_asistencia: c.semaforo_asistencia, texto_asistencia: c.texto_asistencia, estado_alta: c.estado_alta, dias_baja: c.dias_baja, celular: c.celular });
+  const listas = {
+    activos: cl.filter(c => c.semaforo_alta === 'verde').map(fila),
+    activos_en_riesgo: cl.filter(c => c.semaforo_alta === 'verde' && (c.semaforo_asistencia === 'naranja' || c.semaforo_asistencia === 'rojo')).map(fila),
+    bajas_recuperables: cl.filter(c => c.semaforo_alta === 'amarillo').map(fila),
+    asistentes_dia: all("SELECT a.cliente_id AS id, c.nombre, a.hora, a.origen FROM asistencias a JOIN clientes c ON c.id = a.cliente_id WHERE a.fecha = ? AND a.origen <> 'rutina' ORDER BY a.hora, c.nombre COLLATE NOCASE", fecha),
+  };
+  return { fecha, capacidad, porHora, semana: semanaAsist, kpis, listas };
 }
 
 // ------------------------------------------------------------ finanzas
@@ -768,6 +789,7 @@ v1.registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str, num
 v2.registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str, num, requireFecha, fechaOpc, soloDigitos, validarFoto, normTel, bajaEfectiva, semaforoAlta, listaClientes });
 require('./api-v4').registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str });
 require('./api-v6').registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str });
+require('./api-v7').registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str });
 require('./api-v4').registrarV5({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str });
 require('./api-v3').registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str, num, requireFecha, fechaOpc, soloDigitos, normTel, claseAhora, registrarAsistencia, semaforoAlta, horasDeAgenda, asegurarSesion });
 // ------------------------------------------------------------ despacho

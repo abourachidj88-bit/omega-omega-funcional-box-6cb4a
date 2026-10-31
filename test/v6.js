@@ -27,7 +27,7 @@ async function esperar() { for (let i = 0; i < 60; i++) { try { await fetch(BASE
     const suma = (f, n) => new Date(Date.parse(f + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
     const lunesDe = (f) => { const d = new Date(f + 'T00:00:00Z'); return suma(f, -((d.getUTCDay() + 6) % 7)); };
     const L2 = suma(lunesDe(hoy()), 7), L3 = suma(L2, 7);
-    const v = await api('GET', '/api/estado'); assert.match(v.data.version, /Versión 6/); paso('la app informa Versión 6');
+    const v = await api('GET', '/api/estado'); assert.match(v.data.version, /Versión \d+/); paso('la app informa su versión');
 
     console.log('Biblioteca por estímulos');
     r = await api('GET', '/api/estimulos', undefined, admin);

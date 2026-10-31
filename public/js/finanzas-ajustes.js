@@ -21,9 +21,9 @@ vista('/finanzas/mes', ['admin', 'profesor'], async (main) => {
       <div class="infobox" style="margin-bottom:12px">Esta información es privada: solo la ve el administrador. Los ingresos por cuotas se cargan solos cuando renovás un plan.</div>
       <div class="row" style="margin-bottom:12px"><button class="sm" id="ant">‹</button><input type="month" id="mes" value="${mes}" style="width:auto"><button class="sm" id="sig">›</button><b style="text-transform:capitalize">${nombreMes(mes)}</b></div>
       <div class="grid k" style="margin-bottom:14px">
-        <div class="kpi verde"><div class="v">${money(f.ingresos)}</div><div class="l">Ingresos</div></div>
-        <div class="kpi rojo"><div class="v">${money(f.egresos)}</div><div class="l">Egresos</div></div>
-        <div class="kpi ${f.ganancia_neta >= 0 ? 'verde' : 'rojo'}"><div class="v">${money(f.ganancia_neta)}</div><div class="l">Ganancia neta</div></div>
+        <div class="kpi verde"><div class="v"><a href="#" data-lst="ing">${money(f.ingresos)}</a></div><div class="l">Ingresos netos</div></div>
+        <div class="kpi rojo"><div class="v"><a href="#" data-lst="egr">${money(f.egresos)}</a></div><div class="l">Egresos</div></div>
+        <div class="kpi ${f.ganancia_neta >= 0 ? 'verde' : 'rojo'}"><div class="v"><a href="#" data-lst="gan">${money(f.ganancia_neta)}</a></div><div class="l">Ganancia neta</div></div>
         <div class="kpi"><div class="v">${f.punto_equilibrio_alumnos ?? '—'}</div><div class="l">Alumnos para el punto de equilibrio</div></div></div>
       <div class="grid c2">
         <div class="card"><h3>Punto de equilibrio</h3>
@@ -53,6 +53,13 @@ vista('/finanzas/mes', ['admin', 'profesor'], async (main) => {
         <div class="small muted" style="margin-top:6px">El número sobre cada mes es la ganancia neta.</div></div>
       <div class="card"><h3>Movimientos de ${nombreMes(mes)}</h3>${f.movimientos.length ? `<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Categoría</th><th>Concepto</th><th class="num">Monto</th><th></th></tr></thead><tbody>
         ${f.movimientos.map(x => `<tr style="cursor:default"><td>${fmtF(x.fecha)}</td><td><span class="pill ${x.tipo === 'ingreso' ? 'verde' : 'rojo'}">${x.tipo === 'ingreso' ? 'Ingreso' : x.fijo ? 'Egreso fijo' : 'Egreso'}</span></td><td>${esc(x.categoria)}</td><td>${esc(x.concepto || '')}</td><td class="num ${x.tipo === 'ingreso' ? 't-verde' : ''}">${x.tipo === 'ingreso' ? '' : '−'}${money(x.monto)}</td><td class="right">${x.pago_id ? '<span class="small muted">cuota</span>' : `<button class="danger sm" data-del="${x.id}">Quitar</button>`}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">No hay movimientos en este mes.</div>'}</div>`;
+    const fm = (l) => l.map(x => [fmtF(x.fecha), x.categoria || '', x.concepto || '', money(x.monto)]);
+    const ci = ['Fecha', 'Categoría', 'Concepto', 'Monto'];
+    enlazarListas(main, {
+      ing: () => listaModal('Ingresos netos de ' + nombreMes(mes), ci, fm(f.movimientos.filter(x => x.tipo === 'ingreso'))),
+      egr: () => listaModal('Egresos de ' + nombreMes(mes), ci, fm(f.movimientos.filter(x => x.tipo !== 'ingreso'))),
+      gan: () => listaModal('Movimientos de ' + nombreMes(mes), ['Fecha', 'Tipo', 'Concepto', 'Monto'], f.movimientos.map(x => [fmtF(x.fecha), x.tipo === 'ingreso' ? 'Ingreso' : 'Egreso', x.concepto || x.categoria || '', money(x.monto)])),
+    });
     const set = (m) => { mes = m; cargar().catch(fail); };
     $$('#planes [data-sv]', main).forEach(b => b.onclick = async () => {
       const fila = b.closest('.plan-fila'); const body = {}; $$('input[data-k]', fila).forEach(i => { body[i.dataset.k] = i.value; });
@@ -184,12 +191,39 @@ vista('/ajustes', ['admin'], async (main) => {
         <div class="small"><div>Carpeta: <b style="word-break:break-all">${esc(bk.carpeta)}</b></div>${bk.ultimo ? `<div style="margin-top:6px">Última copia: <b>${fmtF(bk.ultimo.fecha)} ${String(bk.ultimo.hora).padStart(2, '0')}:${String(bk.ultimo.min).padStart(2, '0')}</b> · ${esc(bk.ultimo.archivo)}${bk.ultimo.nube && bk.ultimo.nube.subido ? ' · subida a OneDrive ✓' : ''}</div>` : '<div class="t-amarillo" style="margin-top:6px">Todavía no se hizo ninguna copia.</div>'}</div>
         <div class="row" style="margin:12px 0"><button class="primary" id="bk-ya">Hacer una copia ahora</button></div>
         ${bk.archivos.length ? `<div class="small muted">Copias guardadas (${bk.archivos.length}):</div>${bk.archivos.slice(0, 8).map(a => `<div class="row between small"><span>${esc(a.archivo)}</span><span class="muted">${(a.bytes / 1048576).toFixed(2)} MB</span></div>`).join('')}` : ''}</div>
-      <div class="card" id="pais"></div><div class="card" id="camp"></div><div id="sync"></div><div class="card" id="inst"></div><div class="card" id="clave"></div></div>`;
-  bloquePais($('#pais', main)).catch(fail); bloqueCampanas($('#camp', main)).catch(fail); barraSync($('#sync', main)); bloqueInstalar($('#inst', main)); formClave($('#clave', main));
+      <div class="card" id="pais"></div><div class="card" id="desc"></div><div class="card" id="camp"></div><div id="sync"></div><div class="card" id="inst"></div><div class="card" id="clave"></div></div>`;
+  bloquePais($('#pais', main)).catch(fail); bloqueDescuentos($('#desc', main)).catch(fail); bloqueCampanas($('#camp', main)).catch(fail); barraSync($('#sync', main)); bloqueInstalar($('#inst', main)); formClave($('#clave', main));
   $('#bk-ya', main).onclick = async (e) => { e.target.disabled = true; try { const r = await api('POST', '/backups/ahora'); if (r.ok) { toast('Copia creada: ' + r.archivo); render(); } else fail(new Error(r.error)); } catch (er) { fail(er); } e.target.disabled = false; };
 });
 
 vista('/cuenta', ['profesor'], async (main) => {
   main.innerHTML = `<div class="page-title"><h1>Mi cuenta</h1></div><div class="grid c2"><div class="card"><h3>${esc(S.user.nombre)}</h3><div class="muted">Usuario: ${esc(S.user.username)}</div></div><div class="card" id="clave"></div><div class="card" id="inst"></div></div>`;
   formClave($('#clave', main)); bloqueInstalar($('#inst', main));
+  const seg = document.createElement('div'); seg.className = 'card'; seg.style.marginTop = '14px'; main.appendChild(seg); bloqueMisSeguimientos(seg).catch(fail);
 });
+
+
+// ---------- Ajustes · Descuentos (sobre el abono, en % o en pesos, por 1 a 12 meses) ----------
+async function bloqueDescuentos(el) {
+  const lista = await api('GET', '/descuentos?todos=1');
+  el.innerHTML = `<h3>Descuentos</h3><p class="muted small">Armá descuentos para aplicar en “Renovar plan” y como premio por recomendar. Pueden ser un porcentaje del abono o un monto en pesos, durante 1 a 12 meses.</p>
+    ${lista.length ? lista.map(d => `<div class="list-item"><div class="grow"><b>${esc(d.nombre)}</b>${d.activo ? '' : ' <span class="pill">inactivo</span>'}<div class="small muted">${d.tipo === 'pct' ? d.valor + '% sobre el abono' : money(d.valor) + ' menos por mes'} · ${d.meses} ${d.meses === 1 ? 'mes' : 'meses'}</div></div><button class="ghost sm" data-t="${d.id}">${d.activo ? 'Desactivar' : 'Activar'}</button><button class="danger sm" data-x="${d.id}">✕</button></div>`).join('') : '<div class="empty small">Todavía no hay descuentos.</div>'}
+    <form id="fd" class="row" style="margin-top:10px;align-items:flex-end;flex-wrap:wrap">
+      <div class="field" style="margin:0"><label>Tipo</label><select name="tipo"><option value="pct">Porcentaje (%)</option><option value="monto">Monto en pesos ($)</option></select></div>
+      <div class="field" style="margin:0"><label>Valor</label><input name="valor" type="number" min="1" step="any" required style="width:100px"></div>
+      <div class="field" style="margin:0"><label>Por cuántos meses</label><select name="meses">${Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}">${i + 1} ${i ? 'meses' : 'mes'}</option>`).join('')}</select></div>
+      <button class="primary">Crear descuento</button></form>`;
+  $('#fd', el).onsubmit = async (e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); try { await api('POST', '/descuentos', { tipo: f.tipo, valor: Number(f.valor), meses: Number(f.meses) }); toast('Descuento creado'); bloqueDescuentos(el); } catch (er) { fail(er); } };
+  $$('[data-x]', el).forEach(b => b.onclick = async () => { if (!(await confirmar('¿Quitar este descuento? Los pagos ya registrados no cambian.', 'Quitar', true))) return; try { await api('DELETE', '/descuentos/' + b.dataset.x); bloqueDescuentos(el); } catch (e) { fail(e); } });
+  $$('[data-t]', el).forEach(b => b.onclick = async () => { const d = lista.find(x => x.id === Number(b.dataset.t)); try { await api('PUT', '/descuentos/' + d.id, { activo: d.activo ? 0 : 1 }); bloqueDescuentos(el); } catch (e) { fail(e); } });
+}
+
+// ---------- Mi cuenta · seguimientos del profesor ----------
+async function bloqueMisSeguimientos(el) {
+  const d = await api('GET', '/mis-seguimientos');
+  el.innerHTML = `<h3>Mis seguimientos</h3>
+    <div class="small muted" style="margin:4px 0">Visitas del CRM que tengo que seguir (${d.leads.length})</div>
+    ${d.leads.length ? d.leads.map(l => `<div class="list-item"><div class="grow"><b>${esc(l.nombre)}</b> <span class="small muted">· visitó el ${fmtF(l.fecha)}${l.objetivo ? ' · ' + esc(l.objetivo) : ''}</span>${l.ultimo_comentario ? `<div class="small">Último comentario (${fmtF(l.ultimo_comentario.fecha)}): ${esc(l.ultimo_comentario.texto)}</div>` : '<div class="small t-amarillo">Sin comentarios todavía</div>'}</div>${l.telefono ? botonWA(l.telefono, 'WhatsApp', 'sm') : ''}<a class="btn sm" href="#/crm/seguimiento">Abrir</a></div>`).join('') : '<div class="empty small">No tenés visitas para seguir.</div>'}
+    <div class="small muted" style="margin:12px 0 4px">Alumnos con rutina personalizada a mi cargo (${d.rutinas.length})</div>
+    ${d.rutinas.length ? `<div class="tablewrap"><table><thead><tr><th>Alumno</th><th>Rutina</th><th class="num">Veces que entrenó</th><th class="num">Veces que hizo la rutina</th><th>Última clase</th></tr></thead><tbody>${d.rutinas.map(r => `<tr style="cursor:default"><td><a href="#/clientes/${r.cliente_id}"><b>${esc(r.cliente)}</b></a></td><td>${esc(r.rutina)}<div class="small muted">desde ${fmtF(r.desde)}</div></td><td class="num">${r.entrenos}</td><td class="num"><b>${r.rutinas_realizadas}</b></td><td>${r.ultima_asistencia ? fmtF(r.ultima_asistencia) : '—'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty small">No tenés alumnos asignados en seguimiento.</div>'}`;
+}

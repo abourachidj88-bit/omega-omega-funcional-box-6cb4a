@@ -24,7 +24,7 @@ function registrar(ctx) {
     const a = semana.celdasDe(lunes);
     return { semana: lunes, origen: a.origen, desde: a.desde, celdas: a.celdas.filter(c => c.formato_id) };
   });
-  route('PUT', '/api/agenda-semanal', ADM, async ({ req }) => {
+  route('PUT', '/api/agenda-semanal', STAFF, async ({ req }) => {
     const b = await readBody(req);
     if (!Array.isArray(b.celdas)) throw bad('Formato inválido');
     const lunes = lunesDeBody(b.semana);
@@ -38,7 +38,7 @@ function registrar(ctx) {
     semana.guardarAgenda(lunes, celdas);
     return { ok: true, semana: lunes, aplicado: aplicar(lunes, false) };
   });
-  route('POST', '/api/agenda-semanal/copiar', ADM, async ({ req }) => {
+  route('POST', '/api/agenda-semanal/copiar', STAFF, async ({ req }) => {
     const b = await readBody(req);
     const lunes = lunesDeBody(b.semana);
     const n = semana.copiarAgenda(lunes);
@@ -82,7 +82,7 @@ function registrar(ctx) {
   });
 
   // ---- staff de la semana
-  route('POST', '/api/staff/copiar', ADM, async ({ req }) => {
+  route('POST', '/api/staff/copiar', STAFF, async ({ req }) => {
     const b = await readBody(req);
     const lunes = lunesDeBody(b.semana);
     const n = semana.copiarStaff(lunes);

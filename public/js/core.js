@@ -85,6 +85,15 @@ function toast(msg, tipo = '') {
 }
 const fail = (e) => toast(e && e.message ? e.message : String(e), 'err');
 
+// Listado que respalda un número: cols = ['Alumno','Fecha'], filas = [[{t:'Ana',h:'#/clientes/3'},'2026-10-01'], ...]
+function listaModal(titulo, cols, filas) {
+  const cel = (c) => c && typeof c === 'object' ? (c.h ? `<a href="${esc(c.h)}" data-close>${esc(c.t)}</a>` : esc(c.t)) : esc(c == null ? '' : c);
+  return modal(titulo + ' (' + filas.length + ')', `<div class="tablewrap" style="max-height:60vh;overflow:auto"><table><thead><tr>${cols.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${filas.length ? filas.map(f => `<tr style="cursor:default">${f.map(c => `<td>${cel(c)}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${cols.length}" class="muted">Sin datos</td></tr>`}</tbody></table></div><div class="row" style="justify-content:flex-end;margin-top:10px"><button data-close>Cerrar</button></div>`, { wide: true });
+}
+// Vuelve clickeables los números marcados con data-lst="clave": handlers = { clave: () => listaModal(...) }
+function enlazarListas(raiz, handlers) {
+  raiz.querySelectorAll('[data-lst]').forEach(a => { a.onclick = (e) => { e.preventDefault(); const h = handlers[a.dataset.lst]; if (h) h(); }; });
+}
 const modales = [];
 function modal(titulo, html, opts = {}) {
   const back = document.createElement('div');
@@ -123,8 +132,8 @@ function puede(k) {
   const l = u.permisos || []; return String(k).split('|').some(x => l.includes(x));
 }
 const PERM_VISTA = {
-  '/': 'inicio.ver', '/asistencias': 'asist.ver', '/asistencias/cargar': 'asist.registrar', '/asistencias/qr': 'asist.registrar',
-  '/clientes': 'cli.ver', '/clientes/nuevo': 'cli.editar', '/clientes/:id': 'cli.ver', '/crm': 'crm.ver',
+  '/': 'inicio.ver', '/asistencias': 'asist.ver', '/asistencias/seguimiento': 'asist.ver', '/asistencias/cargar': 'asist.registrar', '/asistencias/qr': 'asist.registrar',
+  '/clientes': 'cli.ver', '/clientes/nuevo': 'cli.editar', '/clientes/:id': 'cli.ver', '/crm': 'crm.ver', '/crm/seguimiento': 'crm.ver',
   '/planificacion': 'plan.semana', '/planificacion/circuito/:id': 'plan.semana', '/planificacion/staff': 'plan.staff', '/planificacion/rutinas': 'plan.rutinas',
   '/planificacion/biblioteca': 'plan.biblioteca', '/planificacion/formatos': 'plan.semana', '/planificacion/semana': 'plan.semana', '/planificacion/equipos': 'plan.config',
   '/finanzas': 'fin.caja', '/finanzas/mes': 'fin.analisis', '/finanzas/resultados': 'fin.resultados', '/finanzas/presupuesto': 'fin.presupuesto',

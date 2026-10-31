@@ -18,6 +18,7 @@ const ARBOL = [
     ['cli.renovar', 'Renovar planes y registrar pagos', ''],
     ['cli.deshacer_pago', 'Deshacer pagos', ''],
     ['cli.eliminar', 'Eliminar clientes', ''],
+    ['cli.seguimiento', 'Seguimiento del alumno', 'Cargar el progreso semanal y los comentarios de la pestaña Seguimiento'],
   ] },
   { id: 'crm', nombre: 'CRM (visitas)', items: [
     ['crm.ver', 'Ver visitas y consultas', ''],
@@ -29,11 +30,15 @@ const ARBOL = [
     ['plan.generar', 'Generar, eliminar y editar la semana', 'Generar con IA, armar a mano, eliminar semana, cambiar ejercicios'],
     ['plan.staff', 'Ver la agenda del staff', ''],
     ['plan.staff_editar', 'Asignar profesores a los turnos', ''],
+    ['plan.agenda', 'Editar la agenda semanal y la Agenda Staff', 'Cambiar qué formato se da en cada horario y copiar la semana anterior'],
     ['plan.rutinas', 'Ver rutinas', ''],
     ['plan.rutinas_editar', 'Crear, editar y asignar rutinas', ''],
     ['plan.biblioteca', 'Ver la biblioteca de ejercicios', ''],
     ['plan.biblioteca_editar', 'Cargar, editar y borrar ejercicios', ''],
     ['plan.config', 'Configurar formatos, agenda y equipamiento', 'Intervalos, intensidad mínima, horarios, equipos'],
+  ] },
+  { id: 'cfg', nombre: 'Ajustes', items: [
+    ['cfg.diseno', 'Diseño de la aplicación', 'Colores, fondo, logo y tipografías (botón Diseño)'],
   ] },
   { id: 'fin', nombre: 'Finanzas', items: [
     ['fin.caja', 'Ver la caja diaria', ''],
@@ -48,7 +53,7 @@ const ARBOL = [
 ];
 const TODAS = ARBOL.flatMap(m => m.items.map(i => i[0]));
 // Profesor estándar: todas las tareas operativas, y en Finanzas solamente la caja (ver, saldo inicial, ingresos y egresos)
-const ESTANDAR = TODAS.filter(k => !['fin.caja_borrar', 'fin.analisis', 'fin.resultados', 'fin.presupuesto'].includes(k));
+const ESTANDAR = TODAS.filter(k => !['fin.caja_borrar', 'fin.analisis', 'fin.resultados', 'fin.presupuesto', 'cfg.diseno'].includes(k));
 
 // Qué permiso exige cada ruta del servidor (la primera que coincide). Lo que no figura acá sigue sus reglas por rol.
 const REGLAS = [
@@ -61,8 +66,12 @@ const REGLAS = [
   ['GET', '/api/planificacion', 'plan.semana'], ['GET', '/api/planificacion/circuito/:x', 'plan.semana'], ['GET', '/api/planificacion/circuito/:x/sugerencias', 'plan.semana'],
   ['POST', '/api/planificacion/generar', 'plan.generar'], ['POST', '/api/planificacion/eliminar', 'plan.generar'], ['POST', '/api/planificacion/circuito/:x/regenerar', 'plan.generar'],
   ['PUT', '/api/planificacion/circuito/:x/slot', 'plan.generar'], ['PUT', '/api/planificacion/modo', 'plan.generar'],
-  ['PUT', '/api/agenda-semanal', 'plan.config'], ['POST', '/api/agenda-semanal/copiar', 'plan.config'], ['PUT', '/api/formatos-semana', 'plan.config'], ['POST', '/api/formatos-semana/copiar', 'plan.config'], ['POST', '/api/staff/copiar', 'plan.staff_editar'],
-  ['PUT', '/api/staff/agenda', 'plan.staff_editar'], ['PUT', '/api/staff/sesion', 'plan.staff_editar'],
+  ['PUT', '/api/agenda-semanal', 'plan.agenda'], ['POST', '/api/agenda-semanal/copiar', 'plan.agenda'], ['PUT', '/api/formatos-semana', 'plan.config'], ['POST', '/api/formatos-semana/copiar', 'plan.config'], ['POST', '/api/staff/copiar', 'plan.agenda'],
+  ['PUT', '/api/staff/agenda', 'plan.agenda|plan.staff_editar'], ['PUT', '/api/staff/sesion', 'plan.agenda|plan.staff_editar'],
+  ['PUT', '/api/marca', 'cfg.diseno'],
+  ['PUT', '/api/clientes/:x/seguimiento', 'cli.seguimiento'], ['POST', '/api/comentarios', 'cli.seguimiento|crm.gestionar'], ['DELETE', '/api/comentarios/:x', 'cli.seguimiento|crm.gestionar'],
+  ['GET', '/api/clientes/:x/seguimiento', 'cli.ver'], ['GET', '/api/crm/seguimiento', 'crm.ver'], ['PUT', '/api/leads/:x/perdido', 'crm.gestionar'], ['PUT', '/api/leads/:x/reabrir', 'crm.gestionar'],
+  ['GET', '/api/asistencias/seguimiento', 'asist.ver'],
   ['POST', '/api/rutinas/asignar', 'plan.rutinas_editar'], ['DELETE', '/api/rutinas/asignaciones/:x', 'plan.rutinas_editar'], ['PUT', '/api/rutinas-dia', 'plan.rutinas_editar'],
   ['POST', '/api/rutinas', 'plan.rutinas_editar'], ['PUT', '/api/rutinas/:x', 'plan.rutinas_editar'], ['DELETE', '/api/rutinas/:x', 'plan.rutinas_editar'],
   ['POST', '/api/ejercicios', 'plan.biblioteca_editar'], ['PUT', '/api/ejercicios/:x', 'plan.biblioteca_editar'], ['DELETE', '/api/ejercicios/:x', 'plan.biblioteca_editar'],

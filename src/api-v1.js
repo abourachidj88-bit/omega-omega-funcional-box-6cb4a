@@ -283,7 +283,7 @@ function registrar(c) {
     tema: leerTema(), icono_propio: !!getConfig('icono_192', ''), icono_fuente: getConfig('marca_icono', '') || null, icono_v: getConfig('icono_v', '') || '',
   });
   route('GET', '/api/marca', PUB, () => marca());
-  route('PUT', '/api/marca', ADM, async ({ req }) => {
+  route('PUT', '/api/marca', STAFF, async ({ req }) => {
     const b = await readBody(req, 4 * 1024 * 1024);
     if (b.nombre !== undefined) { const n = str(b.nombre, 40); if (!n) throw bad('Escribí el nombre del gimnasio'); setConfig('marca_nombre', n); }
     if (b.fuente !== undefined) { if (!FUENTES.includes(b.fuente)) throw bad('Tipografía no disponible'); setConfig('marca_fuente', b.fuente); }
@@ -430,7 +430,7 @@ function registrar(c) {
 
   // --- Agenda del staff
   route('GET', '/api/staff/agenda', STAFF, ({ query }) => agendaStaff(query.desde && esFecha(query.desde) ? lunesDe(query.desde) : lunesDe(nowAR().fecha)));
-  route('PUT', '/api/staff/agenda', ADM, async ({ req }) => {
+  route('PUT', '/api/staff/agenda', STAFF, async ({ req }) => {
     const b = await readBody(req);
     if (!Array.isArray(b.celdas)) throw bad('Formato inválido');
     tx(() => {
@@ -442,7 +442,7 @@ function registrar(c) {
     });
     return { ok: true };
   });
-  route('PUT', '/api/staff/sesion', ADM, async ({ req }) => {
+  route('PUT', '/api/staff/sesion', STAFF, async ({ req }) => {
     const b = await readBody(req);
     const fecha = requireFecha(b.fecha), hora = parseInt(b.hora, 10), pid = intOpc(b.profesor_id);
     const a = semana.celda(fecha, hora);

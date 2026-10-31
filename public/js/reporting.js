@@ -113,13 +113,20 @@ vista('/', ['admin', 'profesor'], async (main) => {
       <div id="qr-app" class="qr-esquina-wrap"></div></div>
     <div id="sync-bar" style="margin-bottom:14px"></div>
     <div class="grid k" style="margin-bottom:14px">
-      <div class="kpi verde"><div class="v">${activos.length}</div><div class="l">Alumnos activos</div></div>
-      <div class="kpi naranja"><div class="v">${riesgo}</div><div class="l">Activos en riesgo de abandono</div></div>
-      <div class="kpi amarillo"><div class="v">${rec}</div><div class="l">Bajas recuperables (hasta 3 meses)</div></div>
-      <div class="kpi rojo"><div class="v">${largas}</div><div class="l">Bajas de más de 3 meses</div></div>
+      <div class="kpi verde"><div class="v"><a href="#" data-lst="act">${activos.length}</a></div><div class="l">Alumnos activos</div></div>
+      <div class="kpi naranja"><div class="v"><a href="#" data-lst="rie">${riesgo}</a></div><div class="l">Activos en riesgo de abandono</div></div>
+      <div class="kpi amarillo"><div class="v"><a href="#" data-lst="rec">${rec}</a></div><div class="l">Bajas recuperables (hasta 3 meses)</div></div>
+      <div class="kpi rojo"><div class="v"><a href="#" data-lst="lar">${largas}</a></div><div class="l">Bajas de más de 3 meses</div></div>
     </div>
     <div class="legend"><span><i style="background:var(--verde)"></i>Alta: activo · Asistencia: entrenó esta semana</span><span><i style="background:var(--amarillo)"></i>Alta: baja de hasta 3 meses · Asistencia: 1 semana sin venir</span><span><i style="background:var(--naranja)"></i>Asistencia: 2 a 3 semanas sin venir</span><span><i style="background:var(--rojo)"></i>Alta: baja de más de 3 meses · Asistencia: más de 3 semanas</span></div>
     <div id="lst"></div>`;
+  const fc = (l) => l.map(c => [{ t: c.nombre, h: '#/clientes/' + c.id }, c.ultima_clase ? fmtF(c.ultima_clase) : 'sin clases', fmtF(c.fecha_baja)]);
+  enlazarListas(main, {
+    act: () => listaModal('Alumnos activos', ['Alumno', 'Última clase', 'Vence'], fc(activos)),
+    rie: () => listaModal('Activos en riesgo de abandono', ['Alumno', 'Última clase', 'Vence'], fc(activos.filter(c => c.semaforo_asistencia === 'naranja' || c.semaforo_asistencia === 'rojo'))),
+    rec: () => listaModal('Bajas recuperables', ['Alumno', 'Última clase', 'Baja desde'], fc(clientes.filter(c => c.semaforo_alta === 'amarillo'))),
+    lar: () => listaModal('Bajas de más de 3 meses', ['Alumno', 'Última clase', 'Baja desde'], fc(clientes.filter(c => c.semaforo_alta === 'rojo'))),
+  });
   listadoClientes($('#lst', main), clientes, esAdmin);
   qrEsquina($('#qr-app', main), esAdmin);
   if (esAdmin) barraSync($('#sync-bar', main));
