@@ -780,7 +780,13 @@ route('POST', '/api/finanzas/replicar', ADM, async ({ req }) => {
 });
 
 // --- Backups
-route('GET', '/api/backups', ADM, () => ({ hora_programada: backup.HORA_BACKUP, carpeta: backup.BACKUP_DIR, ultimo: JSON.parse(getConfig('ultimo_backup', 'null')), archivos: backup.listar() }));
+route('GET', '/api/backups', ADM, () => {
+  // Nunca debe tumbar la pantalla de Ajustes: si la carpeta de copias no se puede leer, se informa y se sigue
+  let ultimo = null, archivos = [], aviso = null;
+  try { ultimo = JSON.parse(getConfig('ultimo_backup', 'null')); } catch (_) { ultimo = null; }
+  try { archivos = backup.listar(); } catch (e) { aviso = 'No se pudo leer la carpeta de copias (' + e.message + '). Revisá que exista y que OMEGA tenga permiso para escribir en ella.'; }
+  return { hora_programada: backup.HORA_BACKUP, carpeta: backup.BACKUP_DIR, ultimo, archivos, aviso };
+});
 route('POST', '/api/backups/ahora', ADM, async () => backup.hacerBackup('manual'));
 // ------------------------------------------------------------ Versión 1 (marca, sincronización, CRM, caja, finanzas, staff)
 v1.registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str, num, requireFecha, fechaOpc, soloDigitos, normTel });
@@ -817,7 +823,7 @@ async function dispatch(req, pathname, query) {
   } catch (e) {
     if (!(e instanceof HttpError) && !e.status) console.error('[error]', req.method, pathname, e);
     const status = e.status || 500;
-    return { status, body: { error: e instanceof HttpError || e.status ? e.message : 'Error interno del servidor' } };
+    return { status, body: { error: e instanceof HttpError || e.status ? e.message : 'Error interno del servidor (' + req.method + ' ' + pathname + ': ' + String(e && e.message || e).slice(0, 160) + ')' } };
   }
 }
 

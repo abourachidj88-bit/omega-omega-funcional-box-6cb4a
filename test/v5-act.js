@@ -79,8 +79,8 @@ async function hasta(f, ms = 25000) { const t = Date.now(); while (Date.now() - 
     fs.appendFileSync(path.join(aj.dir, 'server.js'), "\nthrow new Error('versión rota a propósito');\n");
     r = await api(pcBase, 'POST', '/api/actualizacion/aplicar', {}, adm3);
     await hasta(async () => { const a = JSON.parse(fs.readFileSync(path.join(home, 'actualizacion', 'actual.json'), 'utf8')); return a.estado === 'fallida'; }, 30000);
-    const e2 = await hasta(async () => { const x = await api(pcBase, 'POST', '/api/login', { username: 'dueno', password: 'Omega#2026' }); if (x.status !== 200) return null; const y = await api(pcBase, 'GET', '/api/actualizacion/estado', undefined, x.data.token); return y.status === 200 && y.data.version.revision === 0 ? y.data : null; }, 30000);
-    assert.equal(e2.version.revision, 0); assert.equal(e2.en_uso, false); paso('si la versión nueva no arranca, vuelve sola a la anterior y sigue andando');
+    const e2 = await hasta(async () => { const x = await api(pcBase, 'POST', '/api/login', { username: 'dueno', password: 'Omega#2026' }); if (x.status !== 200) return null; const y = await api(pcBase, 'GET', '/api/actualizacion/estado', undefined, x.data.token); return y.status === 200 && y.data.version.revision === require('../src/version').revision ? y.data : null; }, 30000);
+    assert.equal(e2.version.revision, require('../src/version').revision); assert.equal(e2.en_uso, false); paso('si la versión nueva no arranca, vuelve sola a la anterior y sigue andando');
     console.log('\n' + ok + ' pruebas OK');
   } catch (e) { console.error('FALLÓ:', e.stack || e.message); process.exitCode = 1; }
   finally {

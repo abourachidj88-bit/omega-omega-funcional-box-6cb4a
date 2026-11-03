@@ -197,12 +197,12 @@ function bloqueInstalar(cont) {
 }
 
 vista('/ajustes', ['admin'], async (main) => {
-  const bk = await api('GET', '/backups');
+  let bk; try { bk = await api('GET', '/backups'); } catch (e) { bk = { hora_programada: 22, carpeta: '—', ultimo: null, archivos: [], aviso: 'No se pudo leer el estado de las copias de seguridad: ' + e.message }; }
   main.innerHTML = `<div class="page-title"><h1>Ajustes</h1></div>
     <div class="grid c2">
       <div class="card"><h3>Copias de seguridad</h3>
         <p class="muted">Todos los días a las <b>${bk.hora_programada}:00</b> (hora de Argentina) se hace una copia automática de la base de datos y los videos.</p>
-        <div class="small"><div>Carpeta: <b style="word-break:break-all">${esc(bk.carpeta)}</b></div>${bk.ultimo ? `<div style="margin-top:6px">Última copia: <b>${fmtF(bk.ultimo.fecha)} ${String(bk.ultimo.hora).padStart(2, '0')}:${String(bk.ultimo.min).padStart(2, '0')}</b> · ${esc(bk.ultimo.archivo)}${bk.ultimo.nube && bk.ultimo.nube.subido ? ' · subida a OneDrive ✓' : ''}</div>` : '<div class="t-amarillo" style="margin-top:6px">Todavía no se hizo ninguna copia.</div>'}</div>
+        ${bk.aviso ? `<div class="warnbox" style="margin:8px 0">⚠ ${esc(bk.aviso)}</div>` : ''}<div class="small"><div>Carpeta: <b style="word-break:break-all">${esc(bk.carpeta)}</b></div>${bk.ultimo ? `<div style="margin-top:6px">Última copia: <b>${fmtF(bk.ultimo.fecha)} ${String(bk.ultimo.hora).padStart(2, '0')}:${String(bk.ultimo.min).padStart(2, '0')}</b> · ${esc(bk.ultimo.archivo)}${bk.ultimo.nube && bk.ultimo.nube.subido ? ' · subida a OneDrive ✓' : ''}</div>` : '<div class="t-amarillo" style="margin-top:6px">Todavía no se hizo ninguna copia.</div>'}</div>
         <div class="row" style="margin:12px 0"><button class="primary" id="bk-ya">Hacer una copia ahora</button></div>
         ${bk.archivos.length ? `<div class="small muted">Copias guardadas (${bk.archivos.length}):</div>${bk.archivos.slice(0, 8).map(a => `<div class="row between small"><span>${esc(a.archivo)}</span><span class="muted">${(a.bytes / 1048576).toFixed(2)} MB</span></div>`).join('')}` : ''}</div>
       <div class="card" id="pais"></div><div class="card" id="dep"></div><div class="card" id="camp"></div><div id="sync"></div><div class="card" id="inst"></div><div class="card" id="clave"></div></div>`;

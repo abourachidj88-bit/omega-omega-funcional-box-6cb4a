@@ -90,8 +90,11 @@ async function hacerBackup(motivo = 'manual') {
 }
 
 function listar() {
-  return fs.readdirSync(BACKUP_DIR).filter(f => /^omega-.*\.db$/.test(f)).sort().reverse()
-    .map(f => ({ archivo: f, bytes: fs.statSync(path.join(BACKUP_DIR, f)).size }));
+  const out = [];
+  for (const f of fs.readdirSync(BACKUP_DIR).filter(f => /^omega-.*\.db$/.test(f)).sort().reverse()) {
+    try { out.push({ archivo: f, bytes: fs.statSync(path.join(BACKUP_DIR, f)).size }); } catch (_) { /* archivo que desapareció mientras se leía */ }
+  }
+  return out;
 }
 
 function iniciarProgramador() {
