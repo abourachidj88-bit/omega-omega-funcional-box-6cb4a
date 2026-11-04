@@ -94,6 +94,14 @@ async function esperar() { for (let i = 0; i < 60; i++) { try { await fetch(BASE
     r = await api('POST', '/api/depurar/rutinas', { ids: [dup], incluir_activas: true }, admin); assert.equal(r.data.eliminadas, 1);
     r = await api('GET', '/api/rutinas/' + dup, undefined, admin); assert.equal(r.status, 404); paso('las rutinas elegidas se eliminan de la base');
 
+
+    console.log('Importación: accesos y sincronización');
+    r = await api('POST', '/api/clientes/importar', { filas: [{ nombre: 'Importada Uno', celular: '1155550001' }, { nombre: 'Importada Dos' }] }, admin); assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.equal(r.data.creados, 2); assert.equal(r.data.accesos.length, 2); assert.equal(r.data.sync.estado, 'sin_conexion'); paso('cada alumno importado recibe su acceso y se informa que la PC no está conectada a la web');
+    { const { DatabaseSync } = require('node:sqlite'); const x = new DatabaseSync(require('path').join(D, 'omega.db')); x.exec("DELETE FROM usuarios WHERE username = 'importada.uno'"); x.close(); }
+    r = await api('POST', '/api/clientes', { nombre: 'Alta Pantalla', precio_plan: 1000, crear_acceso: false }, admin); assert.equal(r.status, 200, JSON.stringify(r.data)); assert.ok(r.data.acceso && r.data.acceso.usuario, JSON.stringify(r.data)); paso('el alta por pantalla siempre crea el usuario de la app');
+    r = await api('POST', '/api/clientes/importar', { filas: [{ nombre: 'Fila ok' }, { nombre: '' }, { nombre: 'Fila ok dos' }] }, admin); assert.equal(r.data.creados, 2); assert.equal(r.data.errores.length, 1); paso('una fila con error no frena ni deja a medias a las demás');
+
     console.log('Rutinas anteriores sin creador');
     r = await api('GET', '/api/rutinas', undefined, tA); assert.ok(r.data.every(x => 'editable' in x)); paso('el listado general informa quién puede editar cada una');
     console.log('\nTodo OK: ' + ok + ' verificaciones de la Versión 8');

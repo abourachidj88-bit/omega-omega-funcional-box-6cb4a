@@ -2,7 +2,8 @@
 
 Cada modificación que se pide genera una **versión nueva** (1, 2, 3…) a partir de la anterior. Las versiones anteriores quedan guardadas intactas en `OMEGA-versiones/Version-N/` (código fuente, instalador y versión de prueba). Los datos del gimnasio (`C:\OMEGA\datos`) se conservan al pasar de una versión a otra; antes de usar una versión nueva por primera vez OMEGA hace una copia de seguridad automática.
 
-## Versión 8 — 31/10/2026 (revisión 1 — 03/11/2026)
+## Versión 8 — 31/10/2026 (revisión 2 — 04/11/2026)
+- **Revisión 2 · Altas automáticas:** todo alumno dado de alta, por pantalla o por importación de Excel, recibe automáticamente su usuario y contraseña de la app (ya no es opcional). Al iniciar y después de cada importación, OMEGA crea el usuario de cualquier alumno que no lo tenga. Al terminar una importación, la app sincroniza con la web enseguida e informa cómo salió (o por qué no pudo). Una fila con error ya no deja un alumno a medias.
 - **Revisión 1:** la pantalla de Ajustes ya no se cae si falla la lectura de las copias de seguridad (muestra un aviso en su lugar), y los errores internos del servidor ahora indican en qué pantalla y por qué ocurrieron.
 - **Botón “← Volver” en todas las pantallas:** vuelve siempre a la pantalla inmediata anterior (por ejemplo, desde “Ver circuito” regresa a Planificación Semanal).
 - **Rutinas Personalizadas ahora es Cliente → Rutinas:** cada cliente con todas sus rutinas (puede tener varias). Se puede agregar una rutina a un cliente desde la biblioteca o creando una nueva a su medida, que queda también en la biblioteca.

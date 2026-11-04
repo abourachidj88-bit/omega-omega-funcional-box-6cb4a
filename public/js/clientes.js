@@ -22,6 +22,7 @@ vista('/clientes', ['admin', 'profesor'], async (main) => {
     descargarXlsx('omega-clientes-' + hoyAR() + '.xlsx', { Clientes: filas });
   };
   if (puede('cli.editar')) $('#b-imp', main).onclick = importarClientes;
+
 });
 
 // ----- Importar desde Excel / Sheets (archivo .xlsx, .xls o .csv)
@@ -49,6 +50,11 @@ function leerFilasClientes(wb) {
     for (const k of ['fecha_alta', 'fecha_baja', 'precio_plan', 'plan', 'celular', 'instagram']) if (o[k] !== undefined && o[k] !== '') f[k] = o[k];
     return f;
   }).filter(r => r.nombre);
+}
+function estadoSyncImp(s) {
+  if (!s || s.estado === 'nube') return '';
+  if (s.estado === 'ok') return `<div class="okbox" style="margin-top:8px">☁ Sincronizado con la web: se enviaron ${s.enviados} cambios${s.pendientes ? ' (quedan ' + s.pendientes + ' pendientes, siguen solos)' : ''}. Los alumnos ya pueden entrar a la app.</div>`;
+  return `<div class="warnbox" style="margin-top:8px">☁ ${esc(s.mensaje || 'No se pudo sincronizar con la web')}${s.pendientes ? ' (' + s.pendientes + ' cambios pendientes)' : ''}</div>`;
 }
 function importarClientes() {
   const m = modal('Importar clientes desde Excel', `
@@ -84,7 +90,8 @@ function importarClientes() {
             ${r.avisos && r.avisos.length ? `<div class="infobox" style="margin-top:8px">${r.avisos.slice(0, 15).map(esc).join('<br>')}</div>` : ''}
             ${r.errores.length ? `<div class="warnbox" style="margin-top:8px">${r.errores.slice(0, 15).map(esc).join('<br>')}</div>` : ''}
             ${r.accesos.length ? `<p class="small muted" style="margin-top:10px">A cada alumno nuevo se le creó un acceso a la app (usuario y contraseña inicial). Descargá la lista para repartirla.</p>
-            <button id="dl-acc">Descargar accesos (Excel)</button>` : ''}`;
+            <button id="dl-acc">Descargar accesos (Excel)</button>` : ''}
+            ${estadoSyncImp(r.sync)}`;
           const b = $('#dl-acc', res); if (b) b.onclick = () => descargarXlsx('omega-accesos-alumnos.xlsx', { Accesos: r.accesos.map(a => ({ 'Nombre y Apellido': a.nombre, Usuario: a.usuario, Contraseña: a.clave })) });
           toast('Importación terminada');
         } catch (er) { fail(er); ev.target.disabled = false; }
@@ -124,7 +131,7 @@ async function formAlta(cont, c) {
         ${campo('f) Celular o contacto', `<input name="celular" inputmode="tel" value="${esc(c ? c.celular : pre ? pre.celular : '')}" autocomplete="off">`)}
         ${campo('g) Instagram', `<input name="instagram" placeholder="usuario" value="${esc(c ? c.instagram : pre ? pre.instagram : '')}" autocapitalize="none">`)}
       </div></div>
-    ${nuevo ? '<label class="row" style="color:var(--txt);font-size:.95rem"><input type="checkbox" name="crear_acceso" checked> Crear acceso a la app para el alumno (usuario y contraseña)</label>' : ''}
+    ${nuevo ? '<div class="small muted">Al dar de alta al alumno se le crea automáticamente su usuario y contraseña para entrar a la app.</div>' : ''}
     <div class="small muted">Los campos b) foto, f) celular y g) Instagram son opcionales.</div>
     <div class="row sticky-act"><button class="primary" type="submit">${nuevo ? 'Crear alumno' : 'Guardar cambios'}</button>${nuevo ? '' : ''}</div></form>`;
   const sp = $('[name=plan_id]', cont), pp = $('[name=precio_plan]', cont), mp = $('[name=metodo_pago]', cont);
@@ -143,7 +150,6 @@ async function formAlta(cont, c) {
     const btn = $('button[type=submit]', cont); btn.disabled = true;
     try {
       if (nuevo) {
-        body.crear_acceso = !!fd.crear_acceso;
         const r = await api('POST', '/clientes', body);
         toast('Alumno creado');
         if (r.acceso) S.accesoNuevo = { id: r.id, acceso: r.acceso, nombre: fd.nombre };

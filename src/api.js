@@ -126,7 +126,7 @@ function crearCliente(b, user) {
     nombre, validarFoto(b.foto), alta, precio, baja, normTel(str(b.celular, 40)) || null, str(b.instagram, 60).replace(/^@/, '') || null, new Date().toISOString(), planId);
   const id = Number(r.lastInsertRowid);
   let acceso = null;
-  if (b.crear_acceso !== false) acceso = crearAccesoCliente(id, nombre, b.celular);
+  acceso = crearAccesoCliente(id, nombre, b.celular); // todo alumno dado de alta (por pantalla o importado) recibe su usuario de la app
   // Pago del alta (opcional): si se elige el medio de pago queda registrado y, si es efectivo, entra a la caja
   if (user.rol === 'admin' && b.metodo_pago) {
     const metodo = validarMetodo(b.metodo_pago);
@@ -458,6 +458,7 @@ route('POST', '/api/clientes/importar', STAFF, async ({ req, user }) => {
   tx(() => {
     filas.forEach((f, i) => {
       const fila = 'Fila ' + (i + 2);
+      run('SAVEPOINT fila_imp'); // si una fila falla no queda a medias (por ejemplo un alumno sin su acceso)
       try {
         const nombre = str(f.nombre, 120);
         if (!nombre) throw new Error('falta el nombre y apellido');
@@ -499,11 +500,34 @@ route('POST', '/api/clientes/importar', STAFF, async ({ req, user }) => {
           const r = crearCliente({ ...datos, fecha_alta: datos.fecha_alta || nowAR().fecha }, user); out.creados++; todos.push({ id: r.id, nombre, celular: cel });
           if (r.acceso) out.accesos.push({ nombre, ...r.acceso });
         }
-      } catch (e) { out.errores.push(fila + ': ' + e.message); }
+        run('RELEASE fila_imp');
+      } catch (e) { try { run('ROLLBACK TO fila_imp'); run('RELEASE fila_imp'); } catch (_) {} out.errores.push(fila + ': ' + e.message); }
     });
   });
+  // Los alumnos recién cargados viajan enseguida a la web (así pueden entrar a la app desde su celular) y se informa cómo salió
+  try { asegurarAccesos(); } catch (_) {}
+  out.sync = await sincronizarTrasImportar();
   return out;
 });
+async function sincronizarTrasImportar() {
+  try {
+    if (sync.NODO === 'nube') return { estado: 'nube' };
+    const cfg = sync.configuracion();
+    if (!cfg.url || !cfg.clave) return { estado: 'sin_conexion', mensaje: 'Esta PC todavía no está conectada con la web (botón Sincronizar en Inicio): los alumnos quedaron cargados acá pero no se subieron.' };
+    const r = await Promise.race([sync.sincronizar('importacion'), new Promise(res => setTimeout(() => res({ ok: false, error: 'tardó demasiado; sigue en segundo plano' }), 25000))]);
+    const est = sync.estado();
+    return r && r.ok ? { estado: 'ok', enviados: r.enviados, pendientes: est.pendientes } : { estado: 'error', mensaje: (r && r.error) || 'no se pudo sincronizar', pendientes: est.pendientes };
+  } catch (e) { return { estado: 'error', mensaje: e.message }; }
+}
+// Red de seguridad: ningún alumno queda sin usuario de la app (por ejemplo, cargados por una versión anterior o con una fila interrumpida)
+function asegurarAccesos() {
+  const sin = all('SELECT id, nombre, celular FROM clientes WHERE id NOT IN (SELECT cliente_id FROM usuarios WHERE cliente_id IS NOT NULL)');
+  if (!sin.length) return 0;
+  tx(() => sin.forEach(c => crearAccesoCliente(c.id, c.nombre, c.celular)));
+  console.log('[accesos] se crearon ' + sin.length + ' usuarios de alumnos que no tenían');
+  return sin.length;
+}
+if (sync.NODO !== 'nube' && !(typeof globalThis !== 'undefined' && globalThis.OMEGA_DEMO)) { try { asegurarAccesos(); } catch (e) { console.error('[accesos]', e.message); } }
 
 // --- Asistencias
 route('GET', '/api/asistencias', STAFF, ({ query }) => {
