@@ -195,8 +195,8 @@ function configuracion() {
   const env = (typeof process !== 'undefined' && process.env) || {};
   let url = env.NUBE_URL || '', clave = env.NUBE_CLAVE || '';
   if (!url || !clave) { try { const { getConfig } = require('./db'); url = url || getConfig('sync_url', ''); clave = clave || getConfig('sync_clave', ''); } catch (_) {} } // conexión cargada desde el botón Sincronizar
-  // Conexión incluida al armar el instalador (archivo que NO está en GitHub ni en la nube; lo genera installer/build*.sh desde la variable OMEGA_SYNC_CLAVE).
-  if (!env.NUBE_CLAVE) { try { const e = require('./nube-embebida.json'); if (e && e.clave) { clave = e.clave; if (e.url) url = e.url; } } catch (_) {} }
+  // Conexión incluida al armar el instalador (tiene prioridad sobre nube.txt, que puede traer una conexión vieja; el archivo NO está en GitHub ni en la nube; lo genera installer/build*.sh desde la variable OMEGA_SYNC_CLAVE).
+  { try { const e = require('./nube-embebida.json'); if (e && e.clave) { clave = e.clave; if (e.url) url = e.url; } } catch (_) {} }
   url = String(url).replace(/\/+$/, '');
   // Dirección oficial de la nube de OMEGA (no es un secreto: la clave sí, y esa nunca va en el código).
   // Si hay clave pero no dirección, o quedó la de un servicio viejo dado de baja, se usa la oficial.

@@ -2,6 +2,9 @@
 
 Cada modificación que se pide genera una **versión nueva** (1, 2, 3…) a partir de la anterior. Las versiones anteriores quedan guardadas intactas en `OMEGA-versiones/Version-N/` (código fuente, instalador y versión de prueba). Los datos del gimnasio (`C:\OMEGA\datos`) se conservan al pasar de una versión a otra; antes de usar una versión nueva por primera vez OMEGA hace una copia de seguridad automática.
 
+## Versión 11 · revisión 3 — 06/11/2026
+- Corrección: la conexión incluida en el instalador tiene prioridad sobre un `nube.txt` viejo (que apuntaba al servicio anterior con otra clave y hacía que la nube rechazara la sincronización).
+
 ## Versión 11 · revisión 2 — 06/11/2026
 - Instalación sin pasos de conexión: el instalador (base y actualizador) trae la dirección y la clave de la nube de OMEGA, así que al instalar o actualizar la PC se sincroniza sola; solo se configura el gimnasio con la clave de administrador. La clave se inyecta al armar el instalador (variable `OMEGA_SYNC_CLAVE`) y NO está en el código ni en GitHub.
 
