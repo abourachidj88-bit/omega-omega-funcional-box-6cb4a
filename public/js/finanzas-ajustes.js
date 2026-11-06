@@ -199,7 +199,9 @@ function bloqueInstalar(cont) {
 vista('/ajustes', ['admin'], async (main) => {
   let bk; try { bk = await api('GET', '/backups'); } catch (e) { bk = { hora_programada: 22, carpeta: '—', ultimo: null, archivos: [], aviso: 'No se pudo leer el estado de las copias de seguridad: ' + e.message }; }
   main.innerHTML = `<div class="page-title"><h1>Ajustes</h1></div>
-    <div class="grid c2">
+    <div class="tabs" id="aj-tabs"><button data-t="g" class="on">General</button><button data-t="s">Seguridad</button><button data-t="h">Hark Pro</button></div>
+    <div id="aj-s" hidden></div><div id="aj-h" hidden></div>
+    <div class="grid c2" id="aj-g">
       <div class="card"><h3>Copias de seguridad</h3>
         <p class="muted">Todos los días a las <b>${bk.hora_programada}:00</b> (hora de Argentina) se hace una copia automática de la base de datos y los videos.</p>
         ${bk.aviso ? `<div class="warnbox" style="margin:8px 0">⚠ ${esc(bk.aviso)}</div>` : ''}<div class="small"><div>Carpeta: <b style="word-break:break-all">${esc(bk.carpeta)}</b></div>${bk.ultimo ? `<div style="margin-top:6px">Última copia: <b>${fmtF(bk.ultimo.fecha)} ${String(bk.ultimo.hora).padStart(2, '0')}:${String(bk.ultimo.min).padStart(2, '0')}</b> · ${esc(bk.ultimo.archivo)}${bk.ultimo.nube && bk.ultimo.nube.subido ? ' · subida a OneDrive ✓' : ''}</div>` : '<div class="t-amarillo" style="margin-top:6px">Todavía no se hizo ninguna copia.</div>'}</div>
@@ -207,6 +209,12 @@ vista('/ajustes', ['admin'], async (main) => {
         ${bk.archivos.length ? `<div class="small muted">Copias guardadas (${bk.archivos.length}):</div>${bk.archivos.slice(0, 8).map(a => `<div class="row between small"><span>${esc(a.archivo)}</span><span class="muted">${(a.bytes / 1048576).toFixed(2)} MB</span></div>`).join('')}` : ''}</div>
       <div class="card" id="pais"></div><div class="card" id="dep"></div><div class="card" id="camp"></div><div id="sync"></div><div class="card" id="inst"></div><div class="card" id="clave"></div></div>`;
   bloquePais($('#pais', main)).catch(fail); bloqueDepurar($('#dep', main)).catch(fail); bloqueCampanas($('#camp', main)).catch(fail); barraSync($('#sync', main)); bloqueInstalar($('#inst', main)); formClave($('#clave', main));
+  $$('#aj-tabs button', main).forEach(bt => bt.onclick = () => {
+    $$('#aj-tabs button', main).forEach(x => x.classList.toggle('on', x === bt));
+    $('#aj-g', main).hidden = bt.dataset.t !== 'g'; $('#aj-s', main).hidden = bt.dataset.t !== 's'; $('#aj-h', main).hidden = bt.dataset.t !== 'h';
+    if (bt.dataset.t === 's') bloqueSeguridad($('#aj-s', main)).catch(fail);
+    if (bt.dataset.t === 'h') bloqueHark($('#aj-h', main)).catch(fail);
+  });
   $('#bk-ya', main).onclick = async (e) => { e.target.disabled = true; try { const r = await api('POST', '/backups/ahora'); if (r.ok) { toast('Copia creada: ' + r.archivo); render(); } else fail(new Error(r.error)); } catch (er) { fail(er); } e.target.disabled = false; };
 });
 
@@ -306,4 +314,41 @@ async function bloqueDepurar(el) {
     };
   }
   await cargarRama();
+}
+
+
+// ---------- Ajustes · Seguridad: 3 preguntas (múltiple choice) para recuperar la contraseña del administrador ----------
+async function bloqueSeguridad(cont) {
+  const d = await api('GET', '/seguridad');
+  const q = d.catalogo, ele = d.elegidas;
+  const opcPreg = (i) => `<option value="">— Elegí la pregunta ${i + 1} —</option>` + q.map(x => `<option value="${esc(x.id)}" ${ele[i] === x.id ? 'selected' : ''}>${esc(x.texto)}</option>`).join('');
+  cont.innerHTML = `<div class="card" style="max-width:760px"><h3>Recuperar la contraseña</h3>
+    <p class="muted">Si olvidás la contraseña del administrador, podés restablecerla desde la pantalla de ingreso (“Olvidé mi contraseña”) respondiendo estas <b>3 preguntas de seguridad</b>. Hay que acertar las <b>3</b>.</p>
+    <div class="${d.configurada ? 'okbox' : 'warnbox'}" style="margin:8px 0">${d.configurada ? '✔ Las preguntas de seguridad están configuradas. Podés cambiarlas cuando quieras.' : '⚠ Todavía no configuraste las preguntas: si olvidás la contraseña no vas a poder recuperarla.'}</div>
+    <form id="f-seg" class="stack">
+      ${[0, 1, 2].map(i => `<div class="field"><label>Pregunta ${i + 1}</label><select name="p${i}" data-i="${i}">${opcPreg(i)}</select></div><div class="field" id="op${i}" hidden><label>Tu respuesta</label><select name="r${i}"></select></div>`).join('')}
+      <div class="field"><label>Tu contraseña actual (para confirmar el cambio)</label><input type="password" name="clave_actual" autocomplete="current-password" required></div>
+      <div class="err" id="seg-err"></div>
+      <div class="row"><button class="primary">Guardar preguntas</button></div>
+      <div class="small muted">Las respuestas se guardan cifradas. Tras 5 intentos fallidos la recuperación se bloquea 30 minutos.</div>
+    </form></div>`;
+  const f = $('#f-seg', cont);
+  const act = (i) => {
+    const id = f['p' + i].value, box = $('#op' + i, cont), sel = f['r' + i];
+    if (!id) { box.hidden = true; return; }
+    const x = q.find(z => z.id === id);
+    sel.innerHTML = '<option value="">— Elegí tu respuesta —</option>' + x.opciones.map(o => `<option>${esc(o)}</option>`).join('');
+    box.hidden = false;
+  };
+  [0, 1, 2].forEach(i => { f['p' + i].onchange = () => {
+    const ids = [0, 1, 2].map(k => f['p' + k].value).filter(Boolean);
+    if (new Set(ids).size !== ids.length) { toast('No repitas la misma pregunta'); f['p' + i].value = ''; }
+    act(i);
+  }; act(i); });
+  f.onsubmit = async (e) => {
+    e.preventDefault(); const err = $('#seg-err', cont); err.textContent = '';
+    const preguntas = [0, 1, 2].map(i => ({ id: f['p' + i].value, respuesta: f['r' + i].value }));
+    if (preguntas.some(p => !p.id || !p.respuesta)) { err.textContent = 'Elegí las 3 preguntas y tu respuesta a cada una.'; return; }
+    try { await api('PUT', '/seguridad', { preguntas, clave_actual: f.clave_actual.value }); toast('Preguntas de seguridad guardadas'); bloqueSeguridad(cont).catch(fail); } catch (ex) { err.textContent = ex.message; }
+  };
 }

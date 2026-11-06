@@ -14,8 +14,8 @@ const CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-i
   await page.click('[data-demo-user=admin]'); await page.waitForSelector('#tb tr[data-id]');
   const chequeos = [
     ['/finanzas/resultados', /Margen bruto[\s\S]*Resultado del negocio[\s\S]*Sensibilidad de alta/], ['/finanzas/presupuesto', /Inflación base[\s\S]*Punto de equilibrio/],
-    ['/planificacion/rutinas', /Fuerza total A/], ['/ajustes', /País y WhatsApp[\s\S]*Campañas de captación/], ['/crm', /Rendimiento por campaña/],
-    ['/planificacion/agenda', /Agenda semanal/], ['/usuarios', /Accesos[\s\S]*de \d+ permisos/], ['/asistencias', /Ineficiencia de Materiales/],
+    ['/planificacion/rutinas', /Biblioteca de rutinas \(1\)/], ['/ajustes', /País y WhatsApp[\s\S]*Campañas de captación/], ['/crm', /Rendimiento por campaña/],
+    ['/planificacion', /Agenda semanal/], ['/usuarios', /Accesos[\s\S]*de \d+ permisos/], ['/asistencias', /Ineficiencia de Materiales/],
   ];
   for (const [r, rx] of chequeos) {
     await page.evaluate(h => { ir(h); }, '#' + r); await page.waitForTimeout(700);

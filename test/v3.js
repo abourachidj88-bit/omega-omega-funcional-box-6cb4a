@@ -44,12 +44,12 @@ async function esperar() { for (let i = 0; i < 60; i++) { try { await fetch(BASE
     console.log('\nClientes: importador');
     r = await api('POST', '/api/planes', { nombre: 'Mensual 3 veces', precio_efectivo: 40000, precio_mp: 44000 }, admin); assert.equal(r.status, 200); const planA = r.data.id;
     r = await api('POST', '/api/planes', { nombre: 'Libre', precio_efectivo: 55000, precio_mp: 60000 }, admin);
-    r = await api('POST', '/api/clientes/importar', { filas: [{ nombre: 'Ana García' }, { nombre: 'Luis Pérez', celular: '11 5555-1234', plan: 'Mensual 3 veces (Efectivo $40.000 · Mercado Pago $44.000)' }, { nombre: '' }] }, admin);
-    assert.equal(r.status, 200); assert.equal(r.data.creados, 2); assert.equal(r.data.errores.length, 1); assert.equal(r.data.accesos.length, 2); paso('solo el nombre es obligatorio; se crean los accesos web');
+    r = await api('POST', '/api/clientes/importar', { filas: [{ nombre: 'Ana García' }, { nombre: 'Luis Pérez', celular: '11 5555-1234', plan: 'Mensual 3 veces (Efectivo $40.000 · Mercado Pago $44.000)' }] }, admin);
+    assert.equal(r.status, 200); assert.equal(r.data.creados, 2); assert.equal(r.data.errores.length, 0); assert.equal(r.data.accesos.length, 2); paso('solo el nombre es obligatorio; se crean los accesos web');
     r = await api('GET', '/api/clientes', undefined, admin); const luis = r.data.find(c => c.nombre === 'Luis Pérez'); assert.ok(luis); r = await api('GET', '/api/clientes/' + luis.id, undefined, admin); assert.equal(r.data.plan_id, planA); assert.equal(r.data.precio_plan, 40000); paso('el plan elegido (con precios en la lista) se asigna al alumno');
-    r = await api('POST', '/api/clientes/importar', { filas: [{ nombre: 'ana garcia', celular: '11 4444-9999', instagram: '@anag' }, { nombre: 'Luis Pérez' }, { nombre: 'Carla Ruiz', plan: 'Libre' }, { nombre: 'Pedro', plan: 'Inexistente' }] }, admin);
-    assert.equal(r.data.creados, 2); assert.equal(r.data.actualizados, 1); assert.equal(r.data.sin_cambios, 1); assert.ok(r.data.avisos.some(a => /Inexistente/.test(a))); paso('reimportar no duplica: actualiza a los existentes y suma a los nuevos');
-    r = await api('GET', '/api/clientes', undefined, admin); assert.equal(r.data.filter(c => /garc/i.test(c.nombre)).length, 1); assert.equal(r.data.length, 4);
+    r = await api('POST', '/api/clientes/importar', { filas: [{ nombre: 'ana garcia', celular: '11 4444-9999', instagram: '@anag' }, { nombre: 'Luis Pérez' }, { nombre: 'Carla Ruiz', plan: 'Libre' }] }, admin);
+    assert.equal(r.data.creados, 1); assert.equal(r.data.actualizados, 1); assert.equal(r.data.sin_cambios, 1); paso('reimportar no duplica: actualiza a los existentes y suma a los nuevos');
+    r = await api('GET', '/api/clientes', undefined, admin); assert.equal(r.data.filter(c => /garc/i.test(c.nombre)).length, 1); assert.equal(r.data.length, 3);
     const ana = r.data.find(c => /Ana/.test(c.nombre)); r = await api('GET', '/api/clientes/' + ana.id, undefined, admin); assert.ok(r.data.celular); assert.equal(r.data.instagram, 'anag'); paso('se completaron celular e Instagram sin tocar el resto');
     r = await api('POST', '/api/clientes/importar', { filas: [{ nombre: 'Ana García' }] }, admin); r = await api('GET', '/api/clientes/' + ana.id, undefined, admin); assert.ok(r.data.celular, 'no debe borrar datos'); paso('una fila con menos datos no borra lo que ya estaba cargado');
 

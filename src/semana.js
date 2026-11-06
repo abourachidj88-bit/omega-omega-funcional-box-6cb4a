@@ -89,7 +89,18 @@ function origenFormatos(lunes) {
   if (prev) return { tipo: 'heredada', semana: prev.semana };
   return { tipo: 'general', semana: null };
 }
-const CAMPOS_SEMANA = ['estaciones', 'trabajo_seg', 'descanso_seg', 'sin_trabajo', 'sin_descanso', 'duracion_min', 'rondas', 'cupo_estacion', 'intensidad_min', 'patrones', 'capacidades', 'energias'];
+const CAMPOS_SEMANA = ['estaciones', 'trabajo_seg', 'descanso_seg', 'sin_trabajo', 'sin_descanso', 'duracion_min', 'rondas', 'cupo_estacion', 'intensidad_min', 'patrones', 'capacidades', 'energias', 'frecuencias'];
+// V10: veces por semana de cada estímulo (0 a 3). Sin cargar = comportamiento estándar (cada patrón 2 veces por semana)
+function frecLimpia(v) {
+  let o = v; if (typeof v === 'string') { try { o = JSON.parse(v); } catch (_) { o = null; } }
+  const out = {};
+  if (!o || typeof o !== 'object') return out;
+  for (const g of ['patrones', 'capacidades', 'energias']) {
+    if (!o[g] || typeof o[g] !== 'object') continue;
+    for (const c of est.CLAVES[g]) { const n = o[g][c]; if (n === undefined || n === null || n === '') continue; const x = Math.max(0, Math.min(3, parseInt(n, 10))); if (Number.isFinite(x)) (out[g] = out[g] || {})[c] = x; }
+  }
+  return out;
+}
 function normalizar(f) {
   const d = est.defaultsFormato(f.nombre);
   const generales = parseInt(getConfig('estaciones', '5'), 10) || 5;
@@ -97,6 +108,7 @@ function normalizar(f) {
     ...f,
     estaciones_cfg: f.estaciones ?? null,
     estaciones: f.estaciones > 0 ? f.estaciones : generales,
+    frecuencias: frecLimpia(f.frecuencias),
     patrones: est.lista(f.patrones || d.patrones, est.CLAVES.patrones),
     capacidades: est.lista(f.capacidades || d.capacidades, est.CLAVES.capacidades),
     energias: est.lista(f.energias || d.energias, est.CLAVES.energias),
@@ -131,11 +143,11 @@ function guardarFormatos(lunes, lista) {
       if (!ex) continue;
       const f = { ...ex, ...x };
       const estac = x.estaciones !== undefined ? (Math.max(1, Math.min(12, parseInt(x.estaciones, 10) || 0)) || null) : ex.estaciones_cfg;
-      run(`INSERT OR REPLACE INTO formatos_semana (semana, formato_id, estaciones, trabajo_seg, descanso_seg, sin_trabajo, sin_descanso, duracion_min, rondas, cupo_estacion, intensidad_min, patrones, capacidades, energias)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      run(`INSERT OR REPLACE INTO formatos_semana (semana, formato_id, estaciones, trabajo_seg, descanso_seg, sin_trabajo, sin_descanso, duracion_min, rondas, cupo_estacion, intensidad_min, patrones, capacidades, energias, frecuencias)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         lunes, ex.id, estac, f.trabajo_seg ?? null, f.descanso_seg ?? null, f.sin_trabajo ? 1 : 0, f.sin_descanso ? 1 : 0, f.duracion_min ?? null,
         Math.max(1, Math.min(3, parseInt(f.rondas, 10) || 3)), f.cupo_estacion ?? null, f.intensidad_min ?? null,
-        est.aTexto(est.lista(f.patrones, est.CLAVES.patrones)), est.aTexto(est.lista(f.capacidades, est.CLAVES.capacidades)), est.aTexto(est.lista(f.energias, est.CLAVES.energias)));
+        est.aTexto(est.lista(f.patrones, est.CLAVES.patrones)), est.aTexto(est.lista(f.capacidades, est.CLAVES.capacidades)), est.aTexto(est.lista(f.energias, est.CLAVES.energias)), JSON.stringify(frecLimpia(f.frecuencias)));
     }
     marcar(lunes, 'formatos');
   });
@@ -158,5 +170,5 @@ function resumenSemanas(desde, n) {
   return out;
 }
 
-module.exports = { lunesDeFecha, origenAgenda, celdasDe, agendaDe, celda, horasDe, asegurarPropia, guardarAgenda, copiarAgenda, asignarProfesor, copiarStaff,
+module.exports = { frecLimpia, lunesDeFecha, origenAgenda, celdasDe, agendaDe, celda, horasDe, asegurarPropia, guardarAgenda, copiarAgenda, asignarProfesor, copiarStaff,
   origenFormatos, formatosDeSemana, formatoEf, formatosPorId, guardarFormatos, copiarFormatos, resumenSemanas, normalizar };

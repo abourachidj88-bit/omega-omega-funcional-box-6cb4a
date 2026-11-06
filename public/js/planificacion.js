@@ -141,6 +141,14 @@ vista('/planificacion/formatos', ['admin', 'profesor'], async (main) => {
     filas = fs.formatos.map(f => ({ ...f }));
     pintar(desde, fs, est, barra);
   }
+  const frecDe = (f, g, c) => { const v = f.frecuencias && f.frecuencias[g] && f.frecuencias[g][c]; return v === undefined || v === null ? 2 : v; };
+  const avisoFrec = (f) => {
+    const sel = f.patrones || [], total = sel.reduce((a, c) => a + frecDe(f, 'patrones', c), 0), cupo = 3 * (f.estaciones || 0);
+    if (!sel.length || !cupo) return '';
+    if (total > cupo) return `<div class="warnbox small" style="margin-top:6px">Las frecuencias de los patrones suman ${total} y las estaciones de las 3 clases de la semana ofrecen ${cupo} lugares: algunos patrones se van a trabajar menos veces. Subí las estaciones o bajá alguna frecuencia.</div>`;
+    if (total < cupo) return `<div class="infobox small" style="margin-top:6px">Las frecuencias suman ${total} de ${cupo} lugares: los lugares que sobran se completan con los patrones de mayor frecuencia.</div>`;
+    return '';
+  };
   const unidad = (f, k) => f['_u' + k] || ((f[k] || 0) >= 60 && (f[k] % 60 === 0) ? 'min' : 'seg');
   const valor = (f, k) => f[k] == null ? '' : (unidad(f, k) === 'min' ? f[k] / 60 : f[k]);
   function tiempo(f, i, k, off, etiqueta) {
@@ -163,7 +171,9 @@ vista('/planificacion/formatos', ['admin', 'profesor'], async (main) => {
           <label class="row small" style="gap:6px;margin:0"><input type="checkbox" data-st="${i}" ${sinT(f) ? 'checked' : ''} ${adm ? '' : 'disabled'}> Sin intervalos (clase corrida)</label>
           ${sinT(f) ? `<span class="small muted">Duración</span><input type="number" min="1" max="600" data-dm="${i}" value="${f.duracion_min ?? 60}" style="width:76px" ${adm ? '' : 'disabled'}><span class="small muted">min</span>` : `${tiempo(f, i, 'trabajo_seg', false, 'Trabajo')}<label class="row small" style="gap:6px;margin:0 0 0 8px"><input type="checkbox" data-sd="${i}" ${f.sin_descanso ? 'checked' : ''} ${adm ? '' : 'disabled'}> Sin descanso</label>${tiempo(f, i, 'descanso_seg', !!f.sin_descanso, 'Descanso')}`}</div>
         ${2 * (f.patrones || []).length > 3 * (f.estaciones || 0) ? `<div class="infobox small" style="margin-bottom:8px">Con ${f.estaciones} estaciones no entran los ${(f.patrones || []).length} patrones elegidos dos veces por semana: se van rotando entre semanas. Subí las estaciones o sacá patrones.</div>` : ''}
-        <div class="grid c3">${GRUPOS_EST.map(([g, titulo]) => `<div><div class="small" style="margin-bottom:4px"><b>${titulo}</b></div>${est[g].map(o => `<label class="row small" style="gap:6px;margin:0 0 3px;align-items:flex-start" title="${esc(o.ejemplo || '')}"><input type="checkbox" data-g="${g}" data-i="${i}" value="${o.clave}" ${(f[g] || []).includes(o.clave) ? 'checked' : ''} ${adm ? '' : 'disabled'}> <span>${esc(o.nombre)}</span></label>`).join('')}</div>`).join('')}</div>
+        <div class="grid c3">${GRUPOS_EST.map(([g, titulo]) => `<div><div class="small" style="margin-bottom:4px"><b>${titulo}</b></div>${est[g].map(o => `<label class="row small" style="gap:6px;margin:0 0 3px;align-items:flex-start" title="${esc(o.ejemplo || '')}"><input type="checkbox" data-g="${g}" data-i="${i}" value="${o.clave}" ${(f[g] || []).includes(o.clave) ? 'checked' : ''} ${adm ? '' : 'disabled'}> <span style="flex:1;min-width:0">${esc(o.nombre)}</span>${(f[g] || []).includes(o.clave) ? `<select data-fq="${g}|${o.clave}|${i}" title="Veces por semana que se trabaja este estímulo" style="width:auto;padding:1px 4px;font-size:.78rem" ${adm ? '' : 'disabled'}>${[0, 1, 2, 3].map(n => `<option value="${n}" ${frecDe(f, g, o.clave) === n ? 'selected' : ''}>${n}×</option>`).join('')}</select>` : ''}</label>`).join('')}</div>`).join('')}</div>
+        <div class="small muted" style="margin:6px 0 0">El número junto a cada estímulo (<b>0× a 3×</b>) son las <b>veces por semana</b> que se trabaja, para quien viene 3 veces por semana (por defecto 2×). La IA reparte los estímulos en los días de la semana respetando estas frecuencias y las estaciones del formato.</div>
+        ${avisoFrec(f)}
       </div>`).join('')}
       <p class="small muted">Elegí 1 o varios estímulos en cada uno de los tres grupos. La IA arma los circuitos de cada clase con las estaciones y los estímulos de su formato.</p>`;
     ligarBarra(main, desde, () => cargar().catch(fail));
@@ -179,15 +189,17 @@ vista('/planificacion/formatos', ['admin', 'profesor'], async (main) => {
     $$('input[data-st]', main).forEach(ch => ch.onchange = () => { const f = filas[Number(ch.dataset.st)]; f.sin_trabajo = ch.checked ? 1 : 0; if (ch.checked) f.sin_descanso = 1; pintar(desde, fs, est, barra); });
     $$('input[data-sd]', main).forEach(ch => ch.onchange = () => { const f = filas[Number(ch.dataset.sd)]; f.sin_descanso = ch.checked ? 1 : 0; pintar(desde, fs, est, barra); });
     $$('input[data-g]', main).forEach(ch => ch.onchange = () => { const f = filas[Number(ch.dataset.i)], g = ch.dataset.g; const s = new Set(f[g] || []); if (ch.checked) s.add(ch.value); else s.delete(ch.value); f[g] = [...s]; });
+    $$('select[data-fq]', main).forEach(sl => sl.onchange = () => { const [g, c, i] = sl.dataset.fq.split('|'); const f = filas[Number(i)]; f.frecuencias = f.frecuencias || {}; f.frecuencias[g] = { ...(f.frecuencias[g] || {}), [c]: Number(sl.value) }; pintar(desde, fs, est, barra); });
     $('#nombres', main).onclick = () => editarFormatos(filas, 'nombre', () => cargar().catch(fail));
     $('#ok', main).onclick = async () => {
       for (const f of filas) {
         if (!f.estaciones || f.estaciones < 1) return toast('Indicá las estaciones de ' + f.nombre, 'warn');
         if (!f.sin_trabajo && f.trabajo_seg == null) return toast('Completá el tiempo de trabajo de ' + f.nombre, 'warn');
         if (!f.sin_trabajo && !f.sin_descanso && f.descanso_seg == null) return toast('Completá el descanso de ' + f.nombre + ' (o tildá “Sin descanso”)', 'warn');
+        for (const g of ['patrones', 'capacidades', 'energias']) if ((f[g] || []).length && !(f[g] || []).some(c => frecDe(f, g, c) > 0)) return toast(f.nombre + ': al menos un estímulo de «' + (GRUPOS_EST.find(x => x[0] === g) || [])[1] + '» tiene que trabajarse 1 vez por semana o más', 'warn');
         for (const [g, titulo] of GRUPOS_EST) if (!(f[g] || []).length) return toast(f.nombre + ': elegí al menos uno en «' + titulo + '»', 'warn');
       }
-      const body = filas.map(f => ({ id: f.id, estaciones: f.estaciones, rondas: f.rondas || 3, cupo_estacion: f.cupo_estacion ?? null, intensidad_min: f.intensidad_min || 'baja', sin_trabajo: f.sin_trabajo ? 1 : 0, sin_descanso: f.sin_descanso || f.sin_trabajo ? 1 : 0, trabajo_seg: f.trabajo_seg ?? null, descanso_seg: f.descanso_seg ?? null, duracion_min: f.sin_trabajo ? (f.duracion_min || 60) : (f.duracion_min ?? null), patrones: f.patrones, capacidades: f.capacidades, energias: f.energias }));
+      const body = filas.map(f => ({ id: f.id, estaciones: f.estaciones, rondas: f.rondas || 3, cupo_estacion: f.cupo_estacion ?? null, intensidad_min: f.intensidad_min || 'baja', sin_trabajo: f.sin_trabajo ? 1 : 0, sin_descanso: f.sin_descanso || f.sin_trabajo ? 1 : 0, trabajo_seg: f.trabajo_seg ?? null, descanso_seg: f.descanso_seg ?? null, duracion_min: f.sin_trabajo ? (f.duracion_min || 60) : (f.duracion_min ?? null), patrones: f.patrones, capacidades: f.capacidades, energias: f.energias, frecuencias: f.frecuencias || {} }));
       try { await api('PUT', '/formatos-semana', { semana: desde, formatos: body }); toast('Formatos guardados para la semana · circuitos y app de clientes actualizados'); cargar(); } catch (e) { fail(e); }
     };
     $('#copiar', main).onclick = async () => {
@@ -287,25 +299,50 @@ vista('/planificacion', ['admin', 'profesor'], async (main) => {
   await cargar();
 });
 
-// ---------- Equipamiento y capacidad ----------
+// ---------- Equipamiento (V10: cada equipo con su dibujo; la IA usa la configuración de cada formato) ----------
 vista('/planificacion/equipos', ['admin', 'profesor'], async (main) => {
-  const [eq, cfg, sug] = await Promise.all([api('GET', '/equipamiento'), api('GET', '/config-clase'), api('GET', '/sugerencias')]);
+  const [eq, cfg, sug, fmts] = await Promise.all([api('GET', '/equipamiento'), api('GET', '/config-clase'), api('GET', '/sugerencias'), api('GET', '/formatos')]);
+  Ilustra.setDibujos(eq);
+  const editar = puede('plan.config');
+  const lista = eq.filter(e => e.clave !== 'ninguno');
+  const porEst = (f) => (f.cupo_estacion > 0 ? f.cupo_estacion : Math.ceil(cfg.capacidad / Math.max(1, f.estaciones)));
   main.innerHTML = `<div class="page-title"><h1>Equipamiento</h1><div class="actions"><button id="nuevo">＋ Nuevo equipamiento</button><button class="primary" id="ok">Guardar cantidades</button></div></div>${tabsPlan('/planificacion/equipos')}
-    <p class="muted">La IA arma cada circuito para que el equipamiento nunca supere el stock: con ${cfg.capacidad} personas en ${cfg.estaciones} estaciones rotativas hay <b>${cfg.porEstacion} personas por estación</b>. Actualizá las cantidades reales (por ejemplo de 5 a 10 barras) o dá de alta equipamiento nuevo.</p>
+    <p class="muted">La IA arma cada circuito para que el equipamiento <b>nunca supere el stock</b>, usando la configuración de cada formato de entrenamiento (estaciones y personas por estación de <a href="#/planificacion/formatos">Formatos e Intervalos</a>). Actualizá las cantidades reales (por ejemplo de 5 a 10 barras) o dá de alta equipamiento nuevo con su dibujo.</p>
+    <div class="card" style="margin-bottom:14px"><h3>Lo que la IA toma de cada formato</h3>
+      <div class="tablewrap"><table><thead><tr><th>Formato</th><th class="num">Estaciones</th><th class="num">Personas por estación</th></tr></thead><tbody>${fmts.map(f => `<tr style="cursor:default"><td>${chipFormato(f)}</td><td class="num">${f.estaciones}</td><td class="num">${porEst(f)}${f.cupo_estacion > 0 ? '' : ' <span class="muted small">(según capacidad estándar)</span>'}</td></tr>`).join('') || '<tr><td colspan="3" class="empty">Sin formatos.</td></tr>'}</tbody></table></div></div>
     ${sug.length ? `<div class="card" style="border-color:var(--brand);margin-bottom:14px"><div class="row between"><h3 style="margin:0">💡 La IA sugiere ${sug.length} ejercicios nuevos</h3><button class="primary sm" id="s-todas">Agregar todos a la biblioteca</button></div>
       <p class="small muted">Se armaron a partir del equipamiento nuevo. Revisalos: los que aceptes entran a la biblioteca con su progresión y se usan en las próximas planificaciones.</p>
       ${sug.map(x => `<div class="list-item"><div class="grow"><b>${esc(x.nombre)}</b> <span class="pill">${esc(x.zona)}</span><div class="small muted">${esc(x.prog2)} → ${esc(x.prog3)}</div><div class="small">Equipo: ${esc(x.equipo_nombre || x.equipo_clave)}</div></div><button class="sm" data-ver="${x.id}">Ver</button><button class="primary sm" data-ac="${x.id}">Agregar</button><button class="ghost sm" data-de="${x.id}">Descartar</button></div>`).join('')}</div>` : ''}
-    <div class="grid c2"><div class="card"><h3>Stock</h3>${eq.filter(e => e.clave !== 'ninguno').map(e => `<div class="row" style="margin-bottom:8px;flex-wrap:nowrap"><span class="grow">${esc(e.nombre)}</span><input type="number" min="0" data-c="${e.clave}" value="${e.cantidad}" style="width:96px"></div>`).join('')}</div>
-    <div class="card"><h3>Clase</h3>${campo('Capacidad de diseño (personas)', `<input type="number" id="cap" min="5" max="60" value="${cfg.capacidad}">`)}${campo('Estaciones rotativas', `<input type="number" id="est" min="3" max="10" value="${cfg.estaciones}">`)}
-    <div class="small muted">El ingreso de personas nunca se limita: si una clase supera la capacidad, se muestra en el dashboard como ineficiencia de materiales.</div></div></div>`;
+    <div class="eq-grid">${lista.map(e => `<div class="card eq-card" data-k="${esc(e.clave)}"><div class="eq-dib" title="${editar ? 'Tocá para editar el dibujo' : ''}" ${editar ? `data-dib="${esc(e.clave)}"` : ''} style="cursor:${editar ? 'pointer' : 'default'}">${Ilustra.miniEquipo(e.clave, 132, 88)}</div>
+      <div class="eq-nom"><b>${esc(e.nombre)}</b></div>
+      <div class="row" style="gap:6px;align-items:center;flex-wrap:nowrap"><label class="small muted" style="margin:0">Cantidad</label><input type="number" min="0" data-c="${esc(e.clave)}" value="${e.cantidad}" style="width:84px"></div>
+      ${editar ? `<div class="row" style="gap:6px;margin-top:6px"><button class="sm" data-dib="${esc(e.clave)}">✎ ${e.dibujo ? 'Editar dibujo' : 'Dibujar'}</button>${e.dibujo ? `<button class="ghost sm" data-qdib="${esc(e.clave)}" title="Volver al dibujo original">↺</button>` : ''}</div>` : ''}</div>`).join('')}</div>`;
   $('#ok', main).onclick = async () => {
-    try { await api('PUT', '/equipamiento', { equipamiento: $$('[data-c]', main).map(i => ({ clave: i.dataset.c, cantidad: i.value })), capacidad_clase: $('#cap', main).value, estaciones: $('#est', main).value }); toast('Guardado. Rehacé la semana para aplicarlo.'); render(); } catch (e) { fail(e); }
+    try { await api('PUT', '/equipamiento', { equipamiento: $$('[data-c]', main).map(i => ({ clave: i.dataset.c, cantidad: i.value })) }); toast('Guardado. Rehacé la semana para aplicarlo.'); render(); } catch (e) { fail(e); }
   };
+  $$('[data-dib]', main).forEach(b => b.onclick = async (ev) => {
+    ev.stopPropagation();
+    const e = eq.find(x => x.clave === b.dataset.dib);
+    const d = await editarDibujoEquipo({ nombre: e.nombre, dibujo: e.dibujo });
+    if (!d) return;
+    try { await api('PUT', '/equipamiento/' + encodeURIComponent(e.clave), { dibujo: d }); toast('Dibujo guardado'); render(); } catch (er) { fail(er); }
+  });
+  $$('[data-qdib]', main).forEach(b => b.onclick = async () => {
+    if (!(await confirmar('Se quita el dibujo propio y vuelve el original (si el equipo no tiene uno, queda sin dibujo).', 'Quitar dibujo', true))) return;
+    try { await api('PUT', '/equipamiento/' + encodeURIComponent(b.dataset.qdib), { dibujo: null }); render(); } catch (er) { fail(er); }
+  });
   $('#nuevo', main).onclick = () => {
+    let dibujo = null;
     const m = modal('Nuevo equipamiento', `<form id="f" class="stack"><div class="fgrid">${campo('Nombre', '<input name="nombre" required placeholder="Ej.: Cintas TRX" autocomplete="off">')}${campo('Cantidad', '<input name="cantidad" type="number" min="0" value="1" required>')}</div>
+      <div class="field"><label>Dibujo del equipamiento</label><div class="row" style="gap:10px;align-items:center"><div id="mini-nuevo" style="min-width:132px">${Ilustra.miniEquipo('__nuevo', 132, 88)}</div><button type="button" id="dib-nuevo">✎ Dibujar</button></div><div class="small muted">Con este dibujo vas a poder usarlo en “Dibujar las 3 posiciones” de la biblioteca de ejercicios.</div></div>
       <div class="infobox">Al guardarlo, la IA te propone ejercicios nuevos que usen este equipamiento para sumarlos a la biblioteca y a las próximas planificaciones.</div>
       <div class="row" style="justify-content:flex-end"><button type="button" data-close>Cancelar</button><button class="primary">Agregar</button></div></form>`);
-    $('#f', m).onsubmit = async (e) => { e.preventDefault(); try { const r = await api('POST', '/equipamiento', Object.fromEntries(new FormData(e.target))); m.close(); toast('Equipamiento agregado · ' + r.sugerencias + ' ejercicios sugeridos'); render(); } catch (er) { fail(er); } };
+    $('#dib-nuevo', m).onclick = async () => {
+      const nombre = $('[name=nombre]', m).value || 'equipamiento nuevo';
+      const d = await editarDibujoEquipo({ nombre, dibujo });
+      if (d) { dibujo = d; Ilustra.setDibujos([...eq, { clave: '__nuevo', dibujo: d }]); $('#mini-nuevo', m).innerHTML = Ilustra.miniEquipo('__nuevo', 132, 88); }
+    };
+    $('#f', m).onsubmit = async (e) => { e.preventDefault(); try { const r = await api('POST', '/equipamiento', { ...Object.fromEntries(new FormData(e.target)), dibujo }); m.close(); toast('Equipamiento agregado · ' + r.sugerencias + ' ejercicios sugeridos'); render(); } catch (er) { fail(er); } };
   };
   const por = (id) => sug.find(x => x.id === Number(id));
   $$('[data-ac]', main).forEach(b => b.onclick = async () => { try { await api('POST', '/sugerencias/' + b.dataset.ac + '/aceptar', {}); toast('Agregado a la biblioteca'); render(); } catch (e) { fail(e); } });
@@ -355,7 +392,7 @@ vista('/planificacion/biblioteca', ['admin', 'profesor'], async (main) => {
     sessionStorage.setItem('omega_bgrupo', grupo); sessionStorage.setItem('omega_bclave', clave);
     const sel = est[grupo].find(o => o.clave === clave);
     const z = lista.filter(e => (grupo === 'patrones' ? e.zona === sel.nombre : cl(e, grupo === 'capacidades' ? 'capacidad' : 'energia').includes(clave)) && (!buscar || norm(e.nombre + ' ' + e.prog2 + ' ' + e.prog3).includes(norm(buscar))));
-    main.innerHTML = `<div class="page-title"><h1>Biblioteca de ejercicios</h1><div class="actions">${adm ? '<button class="primary" id="nuevo">＋ Nuevo ejercicio</button>' : ''}</div></div>${tabsPlan('/planificacion/biblioteca')}
+    main.innerHTML = `<div class="page-title"><h1>Biblioteca de ejercicios</h1><div class="actions">${adm ? '<button id="col-pat" title="Color con el que se dibujan los ejercicios de cada patrón">Colores de patrones</button><button class="primary" id="nuevo">＋ Nuevo ejercicio</button>' : ''}</div></div>${tabsPlan('/planificacion/biblioteca')}
       <p class="muted">Todos los ejercicios están agrupados por estímulo. Cada ejercicio pertenece a un patrón de movimiento y puede sumar varias capacidades físicas y sistemas energéticos. Tiene dos progresiones, tres imágenes (inicial, media y final) y puede llevar un video.</p>
       <div class="tabs">${GRUPOS_EST.map(([g, t]) => `<button data-g="${g}" class="${g === grupo ? 'on' : ''}">${t.replace('Estímulos de ', '').replace('Estímulos del ', '')}</button>`).join('')}</div>
       <div class="tabs">${subitems(grupo).map(o => `<button data-z="${o.clave}" class="${o.clave === clave ? 'on' : ''}">${esc(o.nombre)} <span class="pill">${o.n}</span></button>`).join('')}</div>
@@ -372,6 +409,7 @@ vista('/planificacion/biblioteca', ['admin', 'profesor'], async (main) => {
     $$('[data-g]', main).forEach(b => b.onclick = () => { grupo = b.dataset.g; clave = ''; buscar = ''; pintar(); });
     $$('[data-z]', main).forEach(b => b.onclick = () => { clave = b.dataset.z; buscar = ''; pintar(); });
     const q = $('#q', main); q.oninput = debounce(() => { buscar = q.value; pintar(); const n = $('#q', main); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 250);
+    const bcol = $('#col-pat', main); if (bcol) bcol.onclick = () => editarColoresPatrones().catch(fail);
     const bnuevo = $('#nuevo', main); if (bnuevo) bnuevo.onclick = () => formEjercicio(null, eq, grupo === 'patrones' ? sel.nombre : ZONAS_UI[0], recargar);
     $$('[data-ed]', main).forEach(b => b.onclick = () => formEjercicio(lista.find(e => e.id === Number(b.dataset.ed)), eq, null, recargar));
     barraArriba($('#tw-ej', main));
@@ -408,6 +446,8 @@ async function formEjercicio(e0, eq, zona, despues) {
   if (e0 && (e0.foto1 || e0.foto2 || e0.foto3)) { try { e = await api('GET', '/ejercicios/' + e0.id); } catch (_) {} }
   const fotos = [e ? e.img1 || null : null, e ? e.img2 || null : null, e ? e.img3 || null : null];
   const tocadas = [false, false, false];
+  let poses = null, posesTocadas = false;
+  if (e && e.poses) { try { poses = JSON.parse(e.poses).poses; } catch (_) {} }
   const m = modal(e ? 'Editar ejercicio' : 'Nuevo ejercicio', `<form id="f" class="stack">
     <div class="fgrid">${campo('Patrón de movimiento', `<select name="zona">${ZONAS_UI.map(z => `<option ${z === (e ? e.zona : zona) ? 'selected' : ''}>${z}</option>`).join('')}</select>`)}
     ${campo('Equipamiento que usa', `<select name="equipo">${eq.map(x => `<option value="${x.clave}" ${x.clave === (e ? e.equipo : 'ninguno') ? 'selected' : ''}>${esc(x.nombre)}</option>`).join('')}</select>`)}</div>
@@ -417,7 +457,8 @@ async function formEjercicio(e0, eq, zona, despues) {
     <div class="fgrid">${campo('Tipo de movimiento (se filtra según zona y equipo)', `<select name="patron"></select>`)}
     ${campo('Intensidad cardiovascular', `<select name="intensidad">${['baja', 'moderada', 'alta'].map(x => `<option value="${x}" ${x === ((e && e.intensidad) || 'baja') ? 'selected' : ''}>${{ baja: 'Baja', moderada: 'Moderada', alta: 'Alta (sube las pulsaciones)' }[x]}</option>`).join('')}</select>`)}</div>
     <div class="grid c2"><div><div class="small"><b>Capacidades físicas integradas</b></div>${_EST.capacidades.map(o => `<label class="row small" style="gap:6px;margin:0 0 3px" title="${esc(o.ejemplo || '')}"><input type="checkbox" name="cap" value="${o.clave}" ${String(e ? e.capacidad : 'fuerza').split(',').includes(o.clave) ? 'checked' : ''}> ${esc(o.nombre)}</label>`).join('')}</div><div><div class="small"><b>Sistema energético</b></div>${_EST.energias.map(o => `<label class="row small" style="gap:6px;margin:0 0 3px" title="${esc(o.ejemplo || '')}"><input type="checkbox" name="ene" value="${o.clave}" ${String(e ? e.energia : 'aerobico').split(',').includes(o.clave) ? 'checked' : ''}> ${esc(o.nombre)}</label>`).join('')}</div></div>
-    <div><label class="small muted">${e ? 'Imágenes: se mantienen las actuales. Podés reemplazarlas por tus propias fotos.' : 'Subí tres fotos ya editadas desde el celular: posición inicial, media y final.'}</label><div id="pos"></div></div>
+    <div><label class="small muted">${e ? 'Imágenes: se mantienen las actuales. Podés reemplazarlas por tus propias fotos.' : 'Subí tres fotos ya editadas desde el celular: posición inicial, media y final.'}</label><div id="pos"></div>
+      <div class="row" style="margin-top:8px;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="primary" id="dibujar">✏️ Dibujar las 3 posiciones</button><span class="small muted">Armá la figura de palitos con el color del patrón y sumale el equipamiento. También podés subir fotos.</span></div></div>
     <div class="row" style="justify-content:flex-end"><button type="button" data-close>Cancelar</button><button class="primary">${e ? 'Guardar' : 'Agregar ejercicio'}</button></div></form>`, { wide: true });
   const f = $('#f', m);
   // Filtros encadenados: los tipos de movimiento válidos salen de lo que ya existe en la biblioteca para esa zona y ese equipo
@@ -444,9 +485,15 @@ async function formEjercicio(e0, eq, zona, despues) {
       $('#pos', m).innerHTML = `<div class="posiciones">${[0, 1, 2].map(i => `<figure class="pos"><div class="pos-img">${fotos[i] ? `<img src="${esc(fotos[i])}" alt="">` : Ilustra.svg(f.patron.value, i, f.equipo.value, nm ? nm.nombre : '')}</div>
         <figcaption><span class="nro">${i + 1}</span> ${Ilustra.NOMBRES[i]}</figcaption><div class="row" style="justify-content:center;gap:6px"><label class="btn sm" style="margin:0">${fotos[i] ? 'Cambiar foto' : 'Subir foto'}<input type="file" accept="image/*" class="hidden" data-f="${i}"></label>${fotos[i] ? `<button type="button" class="ghost sm" data-q="${i}">Usar dibujo</button>` : ''}</div></figure>`).join('')}</div>`;
     }
-    $$('[data-f]', m).forEach(inp => inp.onchange = async () => { const fl = inp.files[0]; if (!fl) return; try { fotos[Number(inp.dataset.f)] = await fotoEjercicio(fl); tocadas[Number(inp.dataset.f)] = true; pintarPos(); } catch (er) { fail(er); } });
-    $$('[data-q]', m).forEach(b => b.onclick = () => { fotos[Number(b.dataset.q)] = null; tocadas[Number(b.dataset.q)] = true; pintarPos(); });
+    $$('[data-f]', m).forEach(inp => inp.onchange = async () => { const fl = inp.files[0]; if (!fl) return; try { fotos[Number(inp.dataset.f)] = await fotoEjercicio(fl); tocadas[Number(inp.dataset.f)] = true; poses = null; posesTocadas = true; pintarPos(); } catch (er) { fail(er); } });
+    $$('[data-q]', m).forEach(b => b.onclick = () => { fotos[Number(b.dataset.q)] = null; tocadas[Number(b.dataset.q)] = true; poses = null; posesTocadas = true; pintarPos(); });
   }
+  $('#dibujar', m).onclick = async () => {
+    const r = await disenarPosiciones({ poses, patronBase: f.patron.value, zona: f.zona.value, eq });
+    if (!r) return;
+    for (let i = 0; i < 3; i++) { fotos[i] = r.imgs[i]; tocadas[i] = true; }
+    poses = r.poses.poses; posesTocadas = true; pintarPos();
+  };
   f.equipo.onchange = () => { llenarPatrones(); pintarPos(); };
   f.patron.onchange = pintarPos;
   f.zona.onchange = () => { llenarPatrones(ZONA_PATRON[f.zona.value]); pintarPos(); };
@@ -458,6 +505,7 @@ async function formEjercicio(e0, eq, zona, despues) {
     body.zona = f.zona.value; body.capacidades = $$('input[name=cap]:checked', f).map(x => x.value); body.energias = $$('input[name=ene]:checked', f).map(x => x.value);
     if (!body.capacidades.length || !body.energias.length) return toast('Elegí al menos una capacidad física y un sistema energético', 'warn');
     ['img1', 'img2', 'img3'].forEach((k, i) => { if (!e || tocadas[i]) body[k] = fotos[i] || null; });
+    if (posesTocadas) body.poses = poses ? { v: 1, poses } : null;
     try { if (e) await api('PUT', '/ejercicios/' + e.id, body); else await api('POST', '/ejercicios', body); m.close(); toast('Guardado'); despues(); } catch (er) { fail(er); }
   };
 }

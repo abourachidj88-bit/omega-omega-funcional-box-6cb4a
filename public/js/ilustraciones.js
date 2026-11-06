@@ -212,9 +212,9 @@
   const f1 = (n) => Math.round(n * 10) / 10;
 
   // ----- glifos del equipamiento
-  function glifoMano(eq, pos, ang) {
+  function glifoMano(eq, pos, ang, colorProp) {
     const [x, y] = pos;
-    const c = COL.prop;
+    const c = colorProp || COL.prop;
     switch (eq) {
       case 'mancuerna': return `<g stroke="${c}" stroke-width="3.2" stroke-linecap="round"><path d="M${f1(x - 5)} ${f1(y)}H${f1(x + 5)}"/><path d="M${f1(x - 5)} ${f1(y - 5)}V${f1(y + 5)}M${f1(x + 5)} ${f1(y - 5)}V${f1(y + 5)}" stroke-width="3.6"/></g>`;
       case 'pesa_rusa': return `<g fill="${c}" stroke="${c}"><circle cx="${f1(x)}" cy="${f1(y + 6)}" r="6.2"/><path d="M${f1(x - 4)} ${f1(y + 2)}Q${f1(x)} ${f1(y - 7)} ${f1(x + 4)} ${f1(y + 2)}" fill="none" stroke-width="2.4"/></g>`;
@@ -308,7 +308,131 @@
     return `<div class="posiciones">${[0, 1, 2].map(i => `<figure class="pos"><div class="pos-img">${f[i] ? `<img src="${f[i].replace(/"/g, '')}" alt="${NOMBRES[i]}">` : svg(patron, i, equipo, nombreEquipo)}</div><figcaption><span class="nro">${i + 1}</span> ${NOMBRES[i]}${f[i] ? '' : ' <span class="sub">ilustración</span>'}</figcaption></figure>`).join('')}</div>`;
   }
 
-  const api = { svg, tira, PATRONES: Object.keys(PAT), NOMBRES };
+  // ====================================================================================================
+  // Versión 9: diseñador de posiciones. Una pose propia es { t, a:[brazo,antebrazo], a2?, l:[muslo,pierna], b?, hx, hy, eq:[{k,x,y,m}] }
+  // con ángulos absolutos (0 = derecha, 90 = abajo). Se dibuja en un cuadro fijo (la cadera está en hx,hy) para que lo que se ve al editar
+  // sea exactamente lo que queda guardado. Los colores van "en duro" para que el dibujo sirva como imagen (data URL) en cualquier tema.
+  const SC = 1.32, SUELO = 146;
+  const EQUIPOS_MANO = ['mancuerna', 'pesa_rusa', 'barra_discos', 'pelota', 'bolso', 'rueda_abdominal'];
+  const EQUIPOS_ESCENA = ['colchoneta', 'cajon', 'banco', 'barra_dominadas', 'conos', 'soga', 'banda_rtx'];
+  const EQUIPOS_DIB = EQUIPOS_MANO.concat(EQUIPOS_ESCENA);
+  const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+
+  function apoyar(o, air) {
+    const k = cinematica(o), pts = puntos(k);
+    const maxY = Math.max(...pts.map(p => p[1])), minX = Math.min(...pts.map(p => p[0])), maxX = Math.max(...pts.map(p => p[0]));
+    o.hy = Math.round(clamp(SUELO - SC * maxY - (air || 0), 12, 150) * 10) / 10;
+    o.hx = Math.round(clamp(100 - SC * (minX + maxX) / 2, 20, 180) * 10) / 10;
+    return o;
+  }
+  function apoyarSuelo(o) { const k = cinematica(o), pts = puntos(k); const maxY = Math.max(...pts.map(p => p[1])); o.hy = Math.round(clamp(SUELO - SC * maxY, 12, 150) * 10) / 10; return o; }
+
+  // Pose inicial para el diseñador: parte de una de las ilustraciones automáticas (con los ángulos ya resueltos)
+  function plantilla(patron) {
+    const def = PAT[patron] || PAT.sentadilla;
+    return def.p.map((q) => {
+      const t = q.t, ab = (a) => a ? [resolver(a[0], t), resolver(a[1], t)] : null;
+      const o = { t, a: ab(q.a) || [90, 90], a2: ab(q.a2), l: q.l.slice(), b: q.b ? q.b.slice() : null, eq: [] };
+      if (q.ht != null) o.ht = q.ht;
+      apoyar(o, q.air || 0);
+      const esc = def.esc;
+      if (esc === 'mat') o.eq.push({ k: 'colchoneta', x: 100, y: SUELO, m: 0 });
+      else if (esc === 'cajon') o.eq.push({ k: 'cajon', x: 150, y: SUELO, m: 0 });
+      else if (esc === 'banco') o.eq.push({ k: 'banco', x: 100, y: SUELO, m: 0 });
+      else if (esc === 'soga') o.eq.push({ k: 'soga', x: 100, y: 110, m: 0 });
+      else if (esc === 'barra') o.eq.push({ k: 'barra_dominadas', x: 100, y: 40, m: 1 });
+      return o;
+    });
+  }
+  const poseVacia = () => apoyar({ t: -90, a: [90, 90], a2: null, l: [90, 90], b: null, eq: [] });
+
+  function glifoEscena(k, x, y, c, naranja, fx) {
+    switch (k) {
+      case 'colchoneta': return `<rect x="${f1(x - 86)}" y="${f1(y)}" width="172" height="4" rx="2" fill="${c}" fill-opacity=".4"/>`;
+      case 'cajon': return `<rect x="${f1(x - 17)}" y="${f1(y - 26)}" width="34" height="26" rx="3" fill="${c}" fill-opacity=".3" stroke="${c}" stroke-width="1.5"/>`;
+      case 'banco': return `<g stroke="${c}" stroke-linecap="round"><path d="M${f1(x - 25)} ${f1(y - 14)}H${f1(x + 25)}" stroke-width="5"/><path d="M${f1(x - 18)} ${f1(y - 12)}V${f1(y)}M${f1(x + 18)} ${f1(y - 12)}V${f1(y)}" stroke-width="2"/></g>`;
+      case 'barra_dominadas': return `<g stroke="${c}" stroke-linecap="round"><path d="M${f1(x - 34)} ${f1(y)}H${f1(x + 34)}" stroke-width="3.4"/><path d="M${f1(x - 34)} ${f1(y)}V${SUELO}M${f1(x + 34)} ${f1(y)}V${SUELO}" stroke-width="2" stroke-opacity=".55"/></g>`;
+      case 'conos': return [x - 14, x + 14].map(cx => `<path d="M${f1(cx - 4)} ${f1(y)}L${f1(cx)} ${f1(y - 10)}L${f1(cx + 4)} ${f1(y)}Z" fill="${naranja}"/>`).join('');
+      case 'soga': return `<path d="M${f1(x)} ${f1(y)}Q${f1(x + 36)} ${f1(y - 30)} ${f1(x - 4)} ${SUELO - 2}" fill="none" stroke="${c}" stroke-width="1.8" stroke-dasharray="3 2"/>`;
+      case 'banda_rtx': return `<circle cx="${f1(x)}" cy="${f1(y)}" r="3" fill="${naranja}"/>` + (fx ? `<path d="M${f1(x)} ${f1(y)}L${f1(fx[0])} ${f1(fx[1])}" stroke="${naranja}" stroke-width="2.4" stroke-dasharray="5 3"/>` : '');
+      default: return `<rect x="${f1(x - 10)}" y="${f1(y - 8)}" width="20" height="16" rx="3" fill="${c}" fill-opacity=".25" stroke="${c}" stroke-width="1.5"/>`;
+    }
+  }
+
+
+  // ----- V10: dibujos propios de cada equipamiento (formas simples en un cuadro de 60 x 40) y tamaño de cada elemento
+  const DIB = {};   // clave del equipamiento -> dibujo { agarre, formas }
+  function setDibujos(lista) {
+    for (const k of Object.keys(DIB)) delete DIB[k];
+    for (const e of (lista || [])) { if (!e || !e.clave || !e.dibujo) continue; try { const d = typeof e.dibujo === 'string' ? JSON.parse(e.dibujo) : e.dibujo; if (d && Array.isArray(d.formas) && d.formas.length) DIB[e.clave] = d; } catch (_) {} }
+  }
+  const enMano = (k) => DIB[k] ? !!DIB[k].agarre : EQUIPOS_MANO.includes(k);
+  function formasSvg(d) {
+    return (d.formas || []).map((f) => {
+      const rel = f.f ? `fill="${f.c}" fill-opacity=".35"` : 'fill="none"', tr = `stroke="${f.c}" stroke-width="${f.g || 2.5}" stroke-linecap="round" stroke-linejoin="round"`;
+      switch (f.t) {
+        case 'r': return `<rect x="${f1(f.x)}" y="${f1(f.y)}" width="${f1(f.w)}" height="${f1(f.h)}" rx="1.5" ${rel} ${tr}/>`;
+        case 'o': return `<ellipse cx="${f1(f.x)}" cy="${f1(f.y)}" rx="${f1(f.rx)}" ry="${f1(f.ry)}" ${rel} ${tr}/>`;
+        case 'a': return `<path d="M${f1(f.x - f.rx)} ${f1(f.y)}A${f1(f.rx)} ${f1(f.ry)} 0 0 1 ${f1(f.x + f.rx)} ${f1(f.y)}" ${rel} ${tr}/>`;
+        case 'l': return `<path d="M${f1(f.x1)} ${f1(f.y1)}L${f1(f.x2)} ${f1(f.y2)}" fill="none" ${tr}/>`;
+        case 'p': return `<polyline points="${f.pts.map(q => f1(q[0]) + ',' + f1(q[1])).join(' ')}" fill="none" ${tr}/>`;
+        default: return '';
+      }
+    }).join('');
+  }
+  // el dibujo (cuadro 60 x 40) queda centrado en (x, y)
+  const glifoCustom = (d, x, y) => `<g transform="translate(${f1(x - 30)} ${f1(y - 20)})">${formasSvg(d)}</g>`;
+  const escalar = (it, g) => { const e = Number(it.s) || 1; return e === 1 ? g : `<g transform="translate(${f1(it.x)} ${f1(it.y)}) scale(${e}) translate(${f1(-it.x)} ${f1(-it.y)})">${g}</g>`; };
+  // miniatura de un equipamiento (para tarjetas y paleta)
+  function miniEquipo(k, ancho = 96, alto = 64) {
+    let cuerpo;
+    if (DIB[k]) cuerpo = glifoCustom(DIB[k], 30, 20);
+    else if (EQUIPOS_MANO.includes(k)) cuerpo = glifoMano(k, [30, 20], 0, '#4da3ff');
+    else if (EQUIPOS_ESCENA.includes(k)) cuerpo = glifoEscena(k, 30, 30, '#4da3ff', '#ff8a3d', null);
+    else return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 40" width="${ancho}" height="${alto}"><rect x="10" y="8" width="40" height="24" rx="3" fill="none" stroke="#8a93a3" stroke-dasharray="3 2"/><text x="30" y="23" text-anchor="middle" font-size="7" fill="#8a93a3" font-family="system-ui,sans-serif">sin dibujo</text></svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 40" width="${ancho}" height="${alto}">${cuerpo}</svg>`;
+  }
+
+  // opt: { color, handles (para el editor), sel (equipo seleccionado) }
+  function pose2svg(pose, opt = {}) {
+    const col = opt.color || '#ff6b35', atras = '#8a93a3', sueloC = '#6b7686', prop = '#4da3ff', naranja = '#ff8a3d';
+    const hx = pose.hx ?? 100, hy = pose.hy ?? 78;
+    const k = cinematica(pose), T = (p) => [p[0] * SC + hx, p[1] * SC + hy];
+    const hip = T(k.hip), sh = T(k.sh), cab = T(k.cab);
+    const q = (a) => ({ el: T(a.el), mu: T(a.mu), mano: T(a.mano) });
+    const q1 = q(k.A1), q2 = q(k.A2);
+    const l1 = { ro: T(k.L1.ro), to: T(k.L1.to), dedo: T(k.L1.dedo) }, l2 = { ro: T(k.L2.ro), to: T(k.L2.to), dedo: T(k.L2.dedo) };
+    const ln = (pts2, color, w) => `<polyline points="${pts2.map(p => f1(p[0]) + ',' + f1(p[1])).join(' ')}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
+    const items = (pose.eq || []).map((it, i) => {
+      let x = it.x, y = it.y;
+      if (it.m === 1) { x = q1.mano[0]; y = q1.mano[1]; } else if (it.m === 2) { x = q2.mano[0]; y = q2.mano[1]; }
+      return { ...it, i, x, y };
+    });
+    let s = `<line x1="8" y1="${SUELO}" x2="192" y2="${SUELO}" stroke="${sueloC}" stroke-width="2"/>`;
+    for (const it of items) if (!enMano(it.k)) s += `<g data-it="${it.i}">${escalar(it, DIB[it.k] ? glifoCustom(DIB[it.k], it.x, it.y) : glifoEscena(it.k, it.x, it.y, prop, naranja, it.k === 'banda_rtx' ? q1.mano : null))}</g>`;
+    s += ln([hip, l2.ro, l2.to, l2.dedo], atras, 3.6) + ln([sh, q2.el, q2.mu], atras, 3.6);
+    s += ln([hip, sh], col, 5);
+    s += `<circle cx="${f1(cab[0])}" cy="${f1(cab[1])}" r="${f1(LG.hd * SC * 0.8)}" fill="none" stroke="${col}" stroke-width="2.6"/>`;
+    s += ln([hip, l1.ro, l1.to, l1.dedo], col, 4.4) + ln([sh, q1.el, q1.mu], col, 4.4);
+    for (const p of [l1.ro, q1.el]) s += `<circle cx="${f1(p[0])}" cy="${f1(p[1])}" r="2.2" fill="none" stroke="${col}" stroke-width="1.4"/>`;
+    for (const it of items) if (enMano(it.k)) s += `<g data-it="${it.i}">${escalar(it, DIB[it.k] ? glifoCustom(DIB[it.k], it.x, it.y) : glifoMano(it.k, [it.x, it.y], 0, prop))}</g>`;
+    if (opt.sel != null && items[opt.sel]) { const it = items[opt.sel]; s += `<circle cx="${f1(it.x)}" cy="${f1(it.y)}" r="13" fill="none" stroke="${naranja}" stroke-width="1.4" stroke-dasharray="3 2"/>`; }
+    if (opt.handles) {
+      const H = [['hip', hip], ['sh', sh], ['el1', q1.el], ['mu1', q1.mano], ['kn1', l1.ro], ['an1', l1.to]];
+      if (pose.a2) H.push(['el2', q2.el], ['mu2', q2.mano]);
+      if (pose.b) H.push(['kn2', l2.ro], ['an2', l2.to]);
+      let hs = '';
+      for (const [n, p] of H) hs += `<g data-h="${n}" style="cursor:grab"><circle cx="${f1(p[0])}" cy="${f1(p[1])}" r="11" fill="transparent"/><circle cx="${f1(p[0])}" cy="${f1(p[1])}" r="${n === 'hip' ? 4.6 : 3.8}" fill="#fff" stroke="${naranja}" stroke-width="1.8"/></g>`;
+      for (const it of items) hs += `<g data-it="${it.i}" style="cursor:move"><circle cx="${f1(it.x)}" cy="${f1(it.y)}" r="12" fill="transparent"/></g>`;
+      s += hs;
+    }
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 160" role="img" aria-label="Posición dibujada" preserveAspectRatio="xMidYMid meet">${s}</svg>`;
+  }
+  const aDataUrl = (svg) => 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+  const dibujoGlifoBase = (k) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 40" width="48" height="32">${EQUIPOS_MANO.includes(k) ? glifoMano(k, [30, 20], 0, '#4da3ff') : glifoEscena(k, 30, 30, '#4da3ff', '#ff8a3d', null)}</svg>`.replace(/<rect x="[\d.-]+" y="[\d.-]+" width="172"/, '<rect x="2" y="30" width="56"');
+
+  const dibujoGlifo = (k) => DIB[k] ? miniEquipo(k, 48, 32) : (EQUIPOS_MANO.includes(k) || EQUIPOS_ESCENA.includes(k)) ? dibujoGlifoBase(k) : miniEquipo(k, 48, 32);
+  const api = { svg, tira, PATRONES: Object.keys(PAT), NOMBRES, cinematica, plantilla, poseVacia, apoyarSuelo, pose2svg, aDataUrl, dibujoGlifo, EQUIPOS_DIB, EQUIPOS_MANO, SC, SUELO, setDibujos, miniEquipo, glifoCustom, formasSvg, enMano };
   if (typeof window !== 'undefined') window.Ilustra = api;
   if (typeof module !== 'undefined') module.exports = api;
 })();

@@ -1,7 +1,7 @@
 'use strict';
 // OMEGA de escritorio (Versión 5). Ventana propia, independiente del navegador. El servidor de OMEGA sigue siendo el mismo (corre en segundo
 // plano con el motor incluido); esta ventana solo lo muestra. Si el servidor se reinicia (actualización), la ventana se reconecta sola.
-const { app, BrowserWindow, Menu, shell, session, dialog } = require('electron');
+const { app, BrowserWindow, Menu, shell, session, dialog, ipcMain } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const http = require('node:http');
@@ -60,7 +60,7 @@ async function reconectar() {
 
 function crearVentana() {
   const icono = [path.join(HOME, 'omega.ico'), path.join(INSTALL, 'omega.ico')].find(p => { try { return fs.existsSync(p); } catch (_) { return false; } });
-  ventana = new BrowserWindow({ width: 1320, height: 880, minWidth: 420, minHeight: 600, title: 'OMEGA', backgroundColor: '#0f1115', autoHideMenuBar: true, show: false, ...(icono ? { icon: icono } : {}), webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false } });
+  ventana = new BrowserWindow({ width: 1320, height: 880, minWidth: 420, minHeight: 600, title: 'OMEGA', backgroundColor: '#0f1115', autoHideMenuBar: true, show: false, ...(icono ? { icon: icono } : {}), webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false, preload: path.join(__dirname, 'preload.js') } });
   ventana.once('ready-to-show', () => { ventana.show(); });
   ventana.on('closed', () => { ventana = null; });
   ventana.webContents.on('page-title-updated', (e) => { e.preventDefault(); });
@@ -77,6 +77,34 @@ function crearVentana() {
   ventana.webContents.on('render-process-gone', (e, d) => { log('render-process-gone: ' + d.reason); reconectar(); });
   cargar();
 }
+
+// ---- Hark Pro: ventana de WhatsApp Web (solo lectura). Lo que se lee se envía al servidor local de OMEGA con la clave que éste deja en C:\OMEGA\hark-token.txt
+let ventanaWA = null;
+function abrirWhatsApp() {
+  if (ventanaWA) { if (ventanaWA.isMinimized()) ventanaWA.restore(); ventanaWA.focus(); return true; }
+  ventanaWA = new BrowserWindow({ width: 1180, height: 820, title: 'Hark Pro · WhatsApp Web', backgroundColor: '#0f1115', autoHideMenuBar: true,
+    webPreferences: { partition: 'persist:omega-whatsapp', contextIsolation: true, nodeIntegration: false, sandbox: true, preload: path.join(__dirname, 'preload-wa.js') } });
+  const ua = ventanaWA.webContents.getUserAgent().replace(/\s?(Electron|omega-escritorio|OMEGA)\/\S+/g, '');   // WhatsApp Web no acepta navegadores "raros"
+  ventanaWA.webContents.setUserAgent(ua);
+  ventanaWA.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/i.test(url)) shell.openExternal(url).catch(() => {}); return { action: 'deny' }; });
+  ventanaWA.webContents.on('will-navigate', (e, url) => { if (!/^https:\/\/([a-z0-9-]+\.)?whatsapp\.(com|net)\//i.test(url)) e.preventDefault(); });
+  ventanaWA.on('closed', () => { ventanaWA = null; });
+  ventanaWA.loadURL('https://web.whatsapp.com/').catch((e) => log('WhatsApp Web: ' + e.message));
+  return true;
+}
+function enviarCaptura(mensajes) {
+  return new Promise((res) => {
+    let token = ''; try { token = fs.readFileSync(path.join(HOME, 'hark-token.txt'), 'utf8').trim(); } catch (_) { return res(false); }
+    const cuerpo = JSON.stringify({ mensajes });
+    const r = http.request({ host: '127.0.0.1', port: PORT, path: '/api/hark/wa/captura', method: 'POST', timeout: 8000, headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(cuerpo), 'x-hark-token': token } }, (x) => { x.resume(); x.on('end', () => res(x.statusCode === 200)); });
+    r.on('error', () => res(false)); r.on('timeout', () => { r.destroy(); res(false); }); r.end(cuerpo);
+  });
+}
+ipcMain.handle('hark:abrir-wa', (ev) => { if (!ev.senderFrame || !String(ev.senderFrame.url || '').startsWith(URL_APP)) return false; return abrirWhatsApp(); });
+ipcMain.handle('hark:mensajes', async (ev, mensajes) => {
+  if (!ventanaWA || ev.sender !== ventanaWA.webContents || !Array.isArray(mensajes)) return false;      // solo acepta lo que manda la ventana de WhatsApp
+  return enviarCaptura(mensajes.slice(0, 200).map(m => ({ uid: String(m.uid || ''), tel: String(m.tel || ''), nombre: String(m.nombre || ''), dir: m.dir === 'out' ? 'out' : 'in', hora: String(m.hora || ''), fecha: String(m.fecha || ''), texto: String(m.texto || '') })));
+});
 
 if (!app.requestSingleInstanceLock()) { app.quit(); }
 else {

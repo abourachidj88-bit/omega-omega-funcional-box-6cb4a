@@ -332,3 +332,20 @@ body.con-foto .auth { background: transparent; }
 .top-scroll { overflow-x: scroll; scrollbar-width: auto; height: 16px; }
 .top-scroll::-webkit-scrollbar { height: 14px; }
 .top-scroll::-webkit-scrollbar-thumb { background: #888; border-radius: 7px; }
+
+/* Versión 9: fecha DD/MM/AAAA con calendario */
+.fecha-dma { position: relative; display: flex; gap: 6px; align-items: center; }
+.fecha-dma .fd-txt { flex: 1; min-width: 0; font-variant-numeric: tabular-nums; letter-spacing: .03em; }
+.fecha-dma .fd-txt.inv { border-color: var(--rojo, #ff4d6d); }
+.fecha-dma .fd-cal { flex: 0 0 auto; padding: 8px 10px; }
+.fecha-dma .fd-pick { position: absolute; right: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+/* Versión 9: lienzo del diseñador de posiciones */
+.lienzo-pose { border: 1px solid var(--line, #2b3240); border-radius: 12px; background: var(--card, #14171c); }
+.lienzo-pose svg { width: 100%; height: auto; display: block; max-height: 62vh; }
+
+/* V10: tarjetas de equipamiento con su dibujo */
+.eq-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+.eq-card { display: flex; flex-direction: column; gap: 8px; }
+.eq-dib { display: flex; align-items: center; justify-content: center; background: var(--bg2, #14181f); border-radius: 10px; min-height: 96px; padding: 4px; }
+.eq-nom { font-size: .92rem; min-height: 2.4em; }

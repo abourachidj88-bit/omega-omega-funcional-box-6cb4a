@@ -89,13 +89,14 @@ vista('/planificacion/rutinas', ['admin', 'profesor'], async (main) => {
         <div class="card" style="margin-bottom:10px"><h3 style="margin:0 0 6px">Inhabilitadas <span class="pill">${inhab.length}</span></h3><p class="small muted">Las rutinas no se eliminan: al inhabilitarlas dejan de verse y de usarse, pero se conservan (con sus alumnos asignados) y las podés activar de nuevo.</p>
           ${inhab.filter(r => !q || norm(r.nombre).includes(q) || norm(r.profesor).includes(q)).map(r => `<div class="list-item"><div class="grow"><b>${esc(r.nombre)}</b> <span class="pill">inhabilitada</span><div class="small muted">Profesor: ${esc(r.profesor)} · ${r.ejercicios} ejercicios · ${r.alumnos} ${r.alumnos === 1 ? 'alumno la tenía' : 'alumnos la tenían'}</div></div>${edita && r.editable ? `<button class="primary sm" data-hab="${r.id}">Activar</button>` : ''}</div>`).join('') || '<div class="empty small">No hay rutinas inhabilitadas.</div>'}</div>`;
     }
-    main.innerHTML = `<div class="page-title"><h1>Rutinas Personalizadas</h1><div class="actions">${edita ? '<button id="asig-cli">＋ Asignar rutina a un cliente</button><button class="primary" id="nueva">＋ Nueva rutina</button>' : ''}</div></div>${tabsPlan('/planificacion/rutinas')}
+    main.innerHTML = `<div class="page-title"><h1>Rutinas Personalizadas</h1><div class="actions">${edita ? '<button id="imp-rut">Importar rutinas (Excel)</button><button id="asig-cli">＋ Asignar rutina a un cliente</button><button class="primary" id="nueva">＋ Nueva rutina</button>' : ''}</div></div>${tabsPlan('/planificacion/rutinas')}
       <div class="row" style="margin-bottom:12px;gap:8px;flex-wrap:wrap"><button class="sm ${modo === 'cliente' ? 'primary' : ''}" id="m-cli">Por cliente (${porCli.length})</button><button class="sm ${modo === 'biblioteca' ? 'primary' : ''}" id="m-bib">Biblioteca de rutinas (${total})</button>
         <input id="q" value="${esc(qraw)}" placeholder="${modo === 'cliente' ? 'Buscar cliente o rutina…' : 'Buscar rutina, profesor o alumno…'}" style="max-width:320px"></div>${cuerpo}`;
     $('#m-cli', main).onclick = () => { modo = 'cliente'; q = qraw = ''; pintar(); };
     $('#m-bib', main).onclick = () => { modo = 'biblioteca'; q = qraw = ''; pintar(); };
     const qi = $('#q', main); qi.oninput = () => { qraw = qi.value; q = norm(qraw); const pos = qi.selectionStart; pintar(); const n = $('#q', main); n.focus(); n.setSelectionRange(pos, pos); };
     const bnr = $('#nueva', main); if (bnr) bnr.onclick = () => formRutina(null);
+    const bir = $('#imp-rut', main); if (bir) bir.onclick = () => importarRutinas(render);
     const bac = $('#asig-cli', main); if (bac) bac.onclick = () => elegirClienteParaRutina(render).catch(fail);
     $$('[data-mas]', main).forEach(b => b.onclick = () => elegirRutinaPara({ id: Number(b.dataset.mas), nombre: b.dataset.n }, render).catch(fail));
     $$('[data-v]', main).forEach(b => b.onclick = () => verRutina(b.dataset.v));
@@ -119,9 +120,9 @@ async function formRutina(r, ctx) {
     $('#items', m).innerHTML = `<div class="tablewrap hbar"><table style="min-width:760px"><thead><tr><th>Patrón de movimiento</th><th>Ejercicio</th><th class="num">Series</th><th>Repeticiones</th><th>Peso</th><th class="num">Descanso (s)</th><th class="num">Seg. por serie</th><th></th></tr></thead><tbody>
       ${items.map((it, i) => `<tr style="cursor:default"><td><select data-i="${i}" data-k="zona">${ZONAS_UI.map(z => `<option ${z === it.zona ? 'selected' : ''}>${z}</option>`).join('')}</select></td>
         <td><select data-i="${i}" data-k="ejercicio_id"><option value="">Elegí…</option>${ejercicios.filter(e => e.zona === it.zona).map(e => `<option value="${e.id}" ${e.id === it.ejercicio_id ? 'selected' : ''}>${esc(e.nombre)}</option>`).join('')}</select></td>
-        <td><input type="number" min="1" max="20" data-i="${i}" data-k="series" value="${it.series}" style="width:64px"></td><td><input data-i="${i}" data-k="repeticiones" value="${esc(String(it.repeticiones))}" style="width:90px" placeholder="8-12"></td>
-        <td><input data-i="${i}" data-k="peso" value="${esc(it.peso || '')}" style="width:90px" placeholder="20 kg"></td><td><input type="number" min="0" max="600" data-i="${i}" data-k="descanso_seg" value="${it.descanso_seg}" style="width:80px"></td>
-        <td><input type="number" min="10" max="300" data-i="${i}" data-k="seg_serie" value="${it.seg_serie}" style="width:80px"></td><td><button type="button" class="danger sm" data-x="${i}">✕</button></td></tr>`).join('')}</tbody></table></div>`;
+        <td><input type="number" min="1" max="99" data-i="${i}" data-k="series" value="${it.series}" style="width:64px"></td><td><input data-i="${i}" data-k="repeticiones" value="${esc(String(it.repeticiones))}" style="width:90px" placeholder="8-12"></td>
+        <td><input data-i="${i}" data-k="peso" value="${esc(it.peso || '')}" style="width:90px" placeholder="Peso corporal" title="Vacío o 0 = peso corporal"></td><td><input type="number" min="0" max="999" data-i="${i}" data-k="descanso_seg" value="${it.descanso_seg}" style="width:80px"></td>
+        <td><input type="number" min="0" max="999" data-i="${i}" data-k="seg_serie" value="${it.seg_serie}" style="width:80px"></td><td><button type="button" class="danger sm" data-x="${i}">✕</button></td></tr>`).join('')}</tbody></table></div>`;
     $$('[data-k]', m).forEach(inp => inp.onchange = inp.oninput = () => {
       const it = items[Number(inp.dataset.i)], k = inp.dataset.k;
       it[k] = k === 'ejercicio_id' ? (inp.value ? Number(inp.value) : null) : inp.value;
@@ -138,5 +139,83 @@ async function formRutina(r, ctx) {
     if (items.some(i => !i.ejercicio_id)) return toast('Elegí el ejercicio de cada fila', 'warn');
     if (durRutina(items) > MAX_RUTINA) return toast('La rutina supera los ' + MAX_RUTINA + ' minutos', 'warn');
     try { const g = r ? await api('PUT', '/rutinas/' + r.id, { ...fd, items }) : await api('POST', '/rutinas', { ...fd, items }); m.close(); toast('Rutina guardada' + (!r ? ' y agregada a la biblioteca' : '')); if (ctx && ctx.cliente && !r) asignarRutina({ id: g.id, nombre: fd.nombre }, ctx.despues || render, ctx.cliente).catch(fail); else { try { sessionStorage.setItem('omega_rut_modo', 'biblioteca'); } catch (_) {} render(); } } catch (er) { fail(er); }
+  };
+}
+
+
+// ---------- Versión 9: importar rutinas desde Excel ----------
+// Una fila por ejercicio; las filas con el mismo nombre forman una rutina. Se revisa todo el archivo antes de cargar nada.
+function leerFilasRutinas(wb) {
+  const hoja = wb.SheetNames.find(n => norm(n) === 'rutinas') || wb.SheetNames[0];
+  const raw = XLSX.utils.sheet_to_json(wb.Sheets[hoja], { defval: '' });
+  const out = [];
+  raw.forEach((r, idx) => {
+    const o = { fila: idx + 2 }; let hay = false;
+    for (const [k, v] of Object.entries(r)) {
+      if (v === '' || v === null || v === undefined || (typeof v === 'string' && !v.trim())) continue;
+      hay = true;
+      const n = norm(k), val = typeof v === 'string' ? v.trim() : v;
+      if (n.includes('descanso')) o.descanso = val;
+      else if (n.includes('segundos') || (n.includes('seg') && n.includes('serie'))) o.seg_serie = val;
+      else if (n.includes('serie')) o.series = val;
+      else if (n.includes('repeticion')) o.repeticiones = val;
+      else if (n.includes('peso')) o.peso = val;
+      else if (n.includes('patron')) o.patron = val;
+      else if (n.includes('ejercicio')) o.ejercicio = val;
+      else if (n.includes('descripcion')) o.descripcion = val;
+      else if (n.includes('rutina') || n.includes('nombre')) o.rutina = val;
+    }
+    if (hay) out.push(o);
+  });
+  return out;
+}
+function importarRutinas(despues) {
+  let cambio = false; // al cerrar la ventana se actualiza el listado (así se alcanza a leer el resultado)
+  const m = modal('Importar rutinas desde Excel', `
+    <div class="grid2" style="gap:12px">
+      <div class="card" style="margin:0"><h4 style="margin-top:0">1 · Planilla modelo</h4>
+        <p class="small muted">Una fila por ejercicio. <b>Patrón de movimiento</b> y <b>Ejercicio</b> son listas desplegables (el ejercicio se filtra según el patrón elegido). Series y repeticiones de 1 a 99, peso de 0 a 999 (vacío = peso corporal), descanso y segundos por serie de 0 a 999.</p>
+        <button id="plantilla">Descargar planilla modelo</button></div>
+      <div class="card" style="margin:0"><h4 style="margin-top:0">2 · Subir la planilla completa</h4>
+        <p class="small muted">Antes de importar se revisa todo el archivo: si hay algún error se te indica la fila y no se carga nada. Las filas con el mismo nombre forman una rutina.</p>
+        <input type="file" id="arch" accept=".xlsx,.xls,.csv"></div></div>
+    <p class="small muted">Si ya tenés una rutina con ese nombre, la nueva se guarda como “Nombre (fecha de creación)” y la anterior no se toca. Las rutinas quedan a tu nombre.</p>
+    <div id="imp-res"></div>`, { wide: true, onClose: () => { if (cambio && despues) despues(); } });
+  $('#plantilla', m).onclick = async () => {
+    try {
+      await estimulos();
+      const ej = await api('GET', '/ejercicios');
+      descargarArchivo('omega-planilla-rutinas.xlsx', XlsxModelo.planillaRutinas(ZONAS_UI, ej));
+    } catch (e) { fail(e); }
+  };
+  $('#arch', m).onchange = async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    const res = $('#imp-res', m); res.innerHTML = '<div class="empty"><span class="spinner"></span> Revisando el archivo…</div>';
+    try {
+      const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
+      const filas = leerFilasRutinas(wb);
+      if (!filas.length) { res.innerHTML = '<div class="warnbox">No encontré filas con datos. Revisá que la primera fila tenga los títulos de la planilla modelo.</div>'; return; }
+      const v = await api('POST', '/rutinas/importar/validar', { filas });
+      if (v.errores.length) {
+        res.innerHTML = `<div class="infobox">Se leyeron <b>${filas.length}</b> filas de “${esc(f.name)}”.</div>${cajaErroresImport(v.errores)}`;
+        toast('El archivo tiene ' + v.errores.length + ' error(es): corregilos antes de importar', 'warn');
+        return;
+      }
+      res.innerHTML = `<div class="okbox">✔ Archivo correcto: <b>${filas.length}</b> filas que forman <b>${v.rutinas}</b> ${v.rutinas === 1 ? 'rutina' : 'rutinas'}, sin errores.</div>
+        <div class="row" style="margin-top:10px"><button class="primary" id="go">Importar ${v.rutinas} ${v.rutinas === 1 ? 'rutina' : 'rutinas'}</button></div>`;
+      $('#go', res).onclick = async (ev) => {
+        ev.target.disabled = true;
+        try {
+          const r = await api('POST', '/rutinas/importar', { filas });
+          if (r.rechazado) { res.innerHTML = cajaErroresImport(r.errores); return; }
+          res.innerHTML = `<div class="okbox">Listo: se crearon <b>${r.creadas.length}</b> ${r.creadas.length === 1 ? 'rutina' : 'rutinas'}.</div>
+            ${r.renombradas.length ? `<div class="infobox" style="margin-top:8px">Ya tenías rutinas con estos nombres, así que se guardaron con la fecha de creación:<br>${r.renombradas.map(x => '“' + esc(x.original) + '” → <b>' + esc(x.nombre) + '</b>').join('<br>')}</div>` : ''}
+            ${r.errores.length ? `<div class="warnbox" style="margin-top:8px">${r.errores.map(esc).join('<br>')}</div>` : ''}
+            <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="primary" data-close>Cerrar</button></div>`;
+          toast('Rutinas importadas');
+          cambio = true;
+        } catch (er) { fail(er); ev.target.disabled = false; }
+      };
+    } catch (er) { res.innerHTML = ''; fail(new Error('No se pudo leer el archivo: ' + er.message)); }
   };
 }

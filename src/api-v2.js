@@ -144,7 +144,7 @@ function registrar(c) {
       // si el cartel "Falta registrar pago" estaba activo cuando se cargó este pago, vuelve a mostrarse hasta que haya un pago definitivo
       let vuelve = p.falta_antes === 1;
       if (p.falta_antes == null && cli && nueva && nueva > nowAR().fecha) vuelve = !get('SELECT 1 AS x FROM pagos WHERE cliente_id = ? AND cubre_hasta >= ?', cli.id, nueva);
-      if (cli && vuelve) run('UPDATE clientes SET falta_pago = 1 WHERE id = ?', cli.id);
+      if (cli && vuelve && Number(cli.precio_plan) > 0) run('UPDATE clientes SET falta_pago = 1 WHERE id = ?', cli.id);
     });
     return { ok: true, falta_pago: !!(cli && get('SELECT falta_pago FROM clientes WHERE id = ?', cli.id).falta_pago), fecha_baja: nueva, meses, monto: p.monto, de_caja: !!(fin && fin.en_caja), medio: fin ? fin.medio : p.metodo };
   });
@@ -232,9 +232,10 @@ function registrar(c) {
     return b.items.map((x, i) => {
       const ej = get('SELECT id, zona FROM ejercicios WHERE id = ? AND activo = 1', Number(x.ejercicio_id));
       if (!ej) throw bad('El ejercicio ' + (i + 1) + ' no existe');
-      const series = Math.max(1, Math.min(20, parseInt(x.series || 3, 10) || 3));
-      const desc = Math.max(0, Math.min(600, parseInt(x.descanso_seg ?? 60, 10) || 0));
-      const seg = Math.max(10, Math.min(300, parseInt(x.seg_serie || 40, 10) || 40));
+      const series = Math.max(1, Math.min(99, parseInt(x.series || 3, 10) || 3));
+      const desc = Math.max(0, Math.min(999, parseInt(x.descanso_seg ?? 60, 10) || 0));
+      const segN = parseInt(x.seg_serie ?? 40, 10);
+      const seg = Math.max(0, Math.min(999, Number.isFinite(segN) ? segN : 40));
       return { ejercicio_id: ej.id, zona: ej.zona, series, repeticiones: str(x.repeticiones, 20) || '10', peso: str(x.peso, 20), descanso_seg: desc, seg_serie: seg };
     });
   };
@@ -318,6 +319,37 @@ function registrar(c) {
   });
   route('GET', '/api/rutinas/:id', STAFF, ({ params }) => { const r = rutinaCompleta(Number(params.id)); if (!r) throw new HttpError(404, 'Rutina no encontrada'); return r; });
   route('POST', '/api/rutinas', STAFF, async ({ req, user }) => guardarRutina(null, await readBody(req), user));
+  // Versión 9: importación de rutinas desde Excel. Una fila por ejercicio; las filas con el mismo nombre forman una rutina.
+  const datosImport = () => all('SELECT id, nombre, zona FROM ejercicios WHERE activo = 1');
+  route('POST', '/api/rutinas/importar/validar', STAFF, async ({ req }) => {
+    const b = await readBody(req, 25 * 1024 * 1024);
+    const filas = Array.isArray(b.filas) ? b.filas : [];
+    if (!filas.length) throw bad('El archivo no tiene filas para importar');
+    if (filas.length > 3000) throw bad('Máximo 3000 filas por importación');
+    const r = require('./validar-import').validarRutinas(filas, datosImport());
+    return { filas: filas.length, rutinas: r.rutinas.length, errores: r.errores.map(e => e.texto), detalle: r.errores };
+  });
+  route('POST', '/api/rutinas/importar', STAFF, async ({ req, user }) => {
+    const b = await readBody(req, 25 * 1024 * 1024);
+    const filas = Array.isArray(b.filas) ? b.filas : [];
+    if (!filas.length) throw bad('El archivo no tiene filas para importar');
+    if (filas.length > 3000) throw bad('Máximo 3000 filas por importación');
+    const r = require('./validar-import').validarRutinas(filas, datosImport());
+    if (r.errores.length) return { rechazado: true, errores: r.errores.map(e => e.texto), detalle: r.errores };
+    const hoy = require('./util').nowAR().fecha, fmt = hoy.slice(8, 10) + '/' + hoy.slice(5, 7) + '/' + hoy.slice(0, 4);
+    const creadas = [], renombradas = [], rechazadas = [];
+    for (const g of r.rutinas) {
+      // Si ya tenés una rutina con ese nombre, la nueva se llama “Nombre (fecha de creación)” y no pisa a la anterior
+      let nombre = g.nombre;
+      const existe = (n) => get('SELECT 1 AS x FROM rutinas WHERE activo = 1 AND lower(nombre) = lower(?) AND COALESCE(creador_id, 0) = ?', n, user.id);
+      if (existe(nombre)) { nombre = (g.nombre.slice(0, 80 - 13) + ' (' + fmt + ')'); let n = 1; while (existe(nombre)) { n++; nombre = g.nombre.slice(0, 80 - 17) + ' (' + fmt + ') ' + n; } renombradas.push({ original: g.nombre, nombre }); }
+      try {
+        const o = guardarRutina(null, { nombre, descripcion: g.descripcion, items: g.items }, user);
+        creadas.push({ id: o.id, nombre, ejercicios: g.items.length, duracion_min: o.duracion_min });
+      } catch (e) { rechazadas.push('Rutina “' + g.nombre + '” (fila ' + g.fila + '): ' + e.message); }
+    }
+    return { creadas, renombradas, errores: rechazadas };
+  });
   route('PUT', '/api/rutinas/:id', STAFF, async ({ req, params, user }) => {
     exigirCreador(Number(params.id), user);
     return guardarRutina(Number(params.id), await readBody(req), user);

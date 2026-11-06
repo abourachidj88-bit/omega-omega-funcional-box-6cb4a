@@ -8,7 +8,7 @@ const r = (...p) => fs.readFileSync(path.join(ROOT, ...p), 'utf8');
 const safe = (js) => js.replace(/<\/script/gi, '<\\/script');
 const SQLASM = process.env.SQLASM || '/tmp/sqljs/node_modules/sql.js/dist/sql-asm.js';
 
-const js = ['core', 'telefono', 'v2-comun', 'ilustraciones', 'marca', 'auth-view', 'reporting', 'lector-qr', 'asistencia', 'xlsx-modelo', 'clientes', 'planificacion', 'rutinas', 'crm', 'finanzas-ajustes', 'finanzas-v1', 'forecast', 'alumno', 'main'].map(n => r('public/js/' + n + '.js'));
+const js = ['core', 'telefono', 'v2-comun', 'ilustraciones', 'marca', 'auth-view', 'reporting', 'lector-qr', 'asistencia', 'xlsx-modelo', 'clientes', 'planificacion', 'rutinas', 'hark', 'editor-equipo', 'disenador-poses', 'crm', 'finanzas-ajustes', 'finanzas-v1', 'forecast', 'alumno', 'main'].map(n => r('public/js/' + n + '.js'));
 const partes = [
   '<title>OMEGA</title>',
   '<style>' + r('public/css/app.css') + '\n</style>',

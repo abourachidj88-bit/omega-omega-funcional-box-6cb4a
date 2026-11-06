@@ -40,7 +40,7 @@ electron() { # $1 = x64 | x86 -> installer/electron/$1  (OMEGA.exe + recursos + 
   mv "$D/electron.exe" "$D/OMEGA.exe"; rm -f "$D/resources/default_app.asar"
   # solo los idiomas necesarios (español e inglés): ahorra ~40 MB
   find "$D/locales" -name '*.pak' ! -name 'es*.pak' ! -name 'en-US.pak' -delete
-  mkdir -p "$D/resources/app"; cp electron-app/main.js electron-app/package.json "$D/resources/app/"
+  mkdir -p "$D/resources/app"; cp electron-app/main.js electron-app/preload.js electron-app/preload-wa.js electron-app/package.json "$D/resources/app/"
 }
 XDEF=""; SUFARQ=""
 case "$SOLO" in

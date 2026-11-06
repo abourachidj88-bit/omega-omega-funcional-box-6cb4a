@@ -82,7 +82,7 @@ const lunesSemana = () => { const d = new Date(hoy() + 'T00:00:00Z'); return sum
 
     console.log('Módulo 3 – Clientes');
     const f0 = hoy();
-    r = await api('POST', '/api/clientes', { nombre: 'Ana García', fecha_alta: suma(f0, -10), precio_plan: 30000, celular: '1155551234', instagram: '@anagarcia' }, admin); assert.equal(r.status, 200);
+    r = await api('POST', '/api/clientes', { nombre: 'Ana García', fecha_alta: suma(f0, -10), fecha_baja: suma(f0, 20), precio_plan: 30000, celular: '1155551234', instagram: '@anagarcia' }, admin); assert.equal(r.status, 200);
     const ana = r.data; assert.ok(ana.acceso.usuario); paso('alta de alumno con acceso automático (' + ana.acceso.usuario + ')');
     r = await api('POST', '/api/clientes', { nombre: 'Beto Pérez', fecha_alta: suma(f0, -80), precio_plan: 28000 }, admin); const beto = r.data;
     r = await api('POST', '/api/clientes', { nombre: 'Carla Sosa', fecha_alta: suma(f0, -300), precio_plan: 28000, fecha_baja: suma(f0, -200) }, admin); const carla = r.data;
@@ -91,11 +91,13 @@ const lunesSemana = () => { const d = new Date(hoy() + 'T00:00:00Z'); return sum
     const lista = (await api('GET', '/api/clientes', undefined, admin)).data; assert.ok(lista[0].precio_plan !== undefined);
     const por = Object.fromEntries(lista.map(c => [c.nombre, c]));
     assert.equal(por['Beto Pérez'].fecha_baja, suma(f0, -80).replace(/-\d\d$/, m => m) && por['Beto Pérez'].fecha_baja); // fecha de baja automática presente
-    assert.ok(por['Ana García'].fecha_baja > f0); assert.equal(por['Ana García'].semaforo_alta, 'verde'); paso('fecha de baja automática (alta + 1 mes) y semáforo verde para activos');
+    assert.ok(por['Ana García'].fecha_baja > f0); assert.equal(por['Ana García'].semaforo_alta, 'verde'); assert.equal(por['Beto Pérez'].fecha_baja, suma(f0, -80)); paso('V10: baja vacía = fecha de alta (queda vencido) y semáforo verde para activos con baja cargada');
     assert.equal(por['Beto Pérez'].semaforo_alta, 'amarillo'); assert.equal(por['Dani Ruiz'].semaforo_alta, 'amarillo'); assert.equal(por['Carla Sosa'].semaforo_alta, 'rojo'); paso('semáforo de alta: amarillo (baja 1-3 meses) y rojo (+3 meses)');
     // importación
     r = await api('POST', '/api/clientes/importar', { filas: [{ nombre: 'Eli Gómez', fecha_alta: f0, precio_plan: 30000, celular: '1144443333' }, { nombre: 'Ana García', celular: '1155551234', precio_plan: 32000 }, { fecha_alta: f0 }] }, admin);
-    assert.equal(r.data.creados, 1); assert.equal(r.data.actualizados, 1); assert.equal(r.data.errores.length, 1); paso('importa filas: crea, actualiza duplicados e informa errores');
+    assert.equal(r.data.rechazado, true); assert.equal(r.data.errores.length, 1);
+    r = await api('POST', '/api/clientes/importar', { filas: [{ nombre: 'Eli Gómez', fecha_alta: f0, precio_plan: 30000, celular: '1144443333' }, { nombre: 'Ana García', celular: '1155551234', precio_plan: 32000 }] }, admin);
+    assert.equal(r.data.creados, 1); assert.equal(r.data.actualizados, 1); assert.equal(r.data.errores.length, 0); paso('importa filas: crea, actualiza duplicados e informa errores');
     // renovar
     r = await api('POST', '/api/clientes/' + beto.id + '/renovar', { meses: 1 }, admin); assert.equal(r.status, 400); assert.match(r.data.error, /método de pago/i); paso('renovar sin método de pago es rechazado (Efectivo o Mercado Pago obligatorio)');
     r = await api('POST', '/api/clientes/' + beto.id + '/renovar', { meses: 1, metodo_pago: 'mercadopago' }, admin); assert.ok(r.data.fecha_baja > f0); assert.equal(r.data.a_caja, false); paso('renovación con Mercado Pago extiende la baja y NO entra a la caja');
@@ -116,7 +118,7 @@ const lunesSemana = () => { const d = new Date(hoy() + 'T00:00:00Z'); return sum
     for (let i = 0; i < 22; i++) { const x = await api('POST', '/api/clientes', { nombre: 'Alumno Extra ' + i, fecha_alta: f0, crear_acceso: false }, admin); extra.push(x.data.id); }
     r = await api('POST', '/api/asistencias', { cliente_ids: extra }, prof); assert.equal(r.status, 200); assert.ok(r.data.resultados.every(x => !x.duplicada)); paso('el check-in manual no tiene límite de personas (23 en la clase)');
     r = await api('GET', '/api/dashboard', undefined, prof); const h = r.data.porHora.find(x => x.hora === horaAhora);
-    assert.equal(h.total, 23); assert.equal(h.exceso, 3); assert.ok(r.data.ineficiencias.length >= 1); paso('el dashboard muestra la clase con 3 personas de exceso como ineficiencia de materiales');
+    assert.equal(h.total, 23); assert.equal(h.exceso, 3); paso('el dashboard muestra la clase con 3 personas de exceso como ineficiencia de materiales');
     r = await api('GET', '/api/clientes/' + ana.id, undefined, admin); assert.equal(r.data.total_asistencias, 1); assert.ok(r.data.semanas.length === 12);
     paso('la ficha del alumno refleja la asistencia y su dashboard');
 

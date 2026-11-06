@@ -68,6 +68,7 @@ function registrar(ctx) {
       if (f.patrones !== undefined) o.patrones = est.lista(f.patrones, est.CLAVES.patrones);
       if (f.capacidades !== undefined) o.capacidades = est.lista(f.capacidades, est.CLAVES.capacidades);
       if (f.energias !== undefined) o.energias = est.lista(f.energias, est.CLAVES.energias);
+      if (f.frecuencias !== undefined) o.frecuencias = semana.frecLimpia(f.frecuencias);
       for (const k of ['patrones', 'capacidades', 'energias']) if (o[k] && !o[k].length) throw bad('Cada formato necesita al menos una opción en patrones de movimiento, capacidades físicas y sistema energético');
       return o;
     });

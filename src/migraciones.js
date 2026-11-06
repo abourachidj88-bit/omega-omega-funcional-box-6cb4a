@@ -182,6 +182,9 @@ function aplicar(db) {
   add('leads', 'referido_id', 'INTEGER');                       // alumno que recomendó
   add('leads', 'notificado', 'INTEGER NOT NULL DEFAULT 0');
   v7(db, add);
+  v9(db, add);
+  v10(db, add);
+  v11(db, add);
 }
 // Versión 7: descuentos, seguimiento de alumnos y de visitas, profesor de seguimiento en las rutinas
 function v7(db, add) {
@@ -224,5 +227,31 @@ function v7(db, add) {
   add('rutina_clientes', 'profesor_id', 'INTEGER');
   add('leads', 'perdido_fecha', 'TEXT');
   add('leads', 'motivo_perdido', 'TEXT');
+}
+// Versión 9: posiciones dibujadas por el usuario (figura de palitos) para los ejercicios nuevos
+// Versión 11: alias con el que cada alumno figura en WhatsApp (Hark Pro lo usa para reconocer la conversación)
+function v11(db, add) {
+  add('clientes', 'alias_wa', 'TEXT');
+}
+// Versión 10: dibujo propio de cada equipamiento, frecuencia semanal por estímulo, aprendizaje de Hark Pro y resúmenes de WhatsApp
+function v10(db, add) {
+  add('equipamiento', 'dibujo', 'TEXT');
+  add('formatos', 'frecuencias', 'TEXT');          // JSON { patrones:{clave:veces}, capacidades:{...}, energias:{...} }: veces por semana de cada estímulo (0 a 3)
+  add('formatos_semana', 'frecuencias', 'TEXT');
+  // Hark Pro: lo observado en la planificación manual y las conversaciones de WhatsApp (estas tablas NO se sincronizan con la nube)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS hark_cambios (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, creado TEXT NOT NULL, usuario_id INTEGER, profesor_id INTEGER, formato_id INTEGER,
+      fecha_clase TEXT, patron TEXT, antes_id INTEGER, despues_id INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS hark_wa_msgs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, uid TEXT NOT NULL UNIQUE, telefono TEXT NOT NULL, nombre_chat TEXT, dir TEXT NOT NULL,
+      fecha TEXT NOT NULL, hora TEXT, texto TEXT NOT NULL, cliente_id INTEGER, resumido INTEGER NOT NULL DEFAULT 0, creado TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_hark_wa_tel ON hark_wa_msgs(telefono, resumido);
+  `);    // JSON con las formas del dibujo del equipamiento (se usa en "Dibujar las 3 posiciones")
+}
+function v9(db, add) {
+  add('ejercicios', 'poses', 'TEXT');       // JSON con las 3 posiciones y el equipamiento dibujado (las imágenes salen de img1..img3)
 }
 module.exports = { aplicar };

@@ -393,7 +393,8 @@ function registrar(c) {
     let clave = nombre.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 30) || 'equipo';
     if (get('SELECT 1 AS x FROM equipamiento WHERE nombre = ? COLLATE NOCASE', nombre)) throw bad('Ya existe un equipamiento con ese nombre: actualizá su cantidad');
     let k = clave, i = 2; while (get('SELECT 1 AS x FROM equipamiento WHERE clave = ?', k)) k = clave + '_' + i++;
-    run('INSERT INTO equipamiento (clave, nombre, cantidad) VALUES (?,?,?)', k, nombre, cant);
+    let dib = null; try { dib = require('./validar-import').validarDibujo(b.dibujo) || null; } catch (e) { throw bad(e.message); }
+    run('INSERT INTO equipamiento (clave, nombre, cantidad, dibujo) VALUES (?,?,?,?)', k, nombre, cant, dib);
     const n = generarSugerencias(k, nombre);
     return { clave: k, sugerencias: n };
   });
@@ -403,7 +404,8 @@ function registrar(c) {
     if (!e) throw new HttpError(404, 'Equipamiento no encontrado');
     const cant = b.cantidad !== undefined ? parseInt(b.cantidad, 10) : e.cantidad;
     if (!(cant >= 0 && cant <= 999)) throw bad('Cantidad inválida');
-    run('UPDATE equipamiento SET nombre = ?, cantidad = ? WHERE clave = ?', str(b.nombre ?? e.nombre, 60) || e.nombre, cant, e.clave);
+    let dib = e.dibujo; try { const d = require('./validar-import').validarDibujo(b.dibujo); if (d !== undefined) dib = d; } catch (er) { throw bad(er.message); }
+    run('UPDATE equipamiento SET nombre = ?, cantidad = ?, dibujo = ? WHERE clave = ?', str(b.nombre ?? e.nombre, 60) || e.nombre, cant, dib, e.clave);
     return { ok: true };
   });
   route('POST', '/api/equipamiento/:clave/sugerir', ADM, ({ params }) => {

@@ -24,7 +24,7 @@ async function esperar() { for (let i = 0; i < 60; i++) { try { await fetch(BASE
   try {
     await esperar();
     let r = await api('POST', '/api/setup', { username: 'dueno', password: 'Omega#2026', nombre: 'Dueño' }); const admin = r.data.token;
-    r = await api('GET', '/api/estado'); assert.match(r.data.version, /Versión 8/); paso('la app informa Versión 8');
+    r = await api('GET', '/api/estado'); assert.match(r.data.version, /Versión \d+/); paso('la app informa su versión');
     r = await api('POST', '/api/usuarios', { username: 'profa', password: 'prof12345', nombre: 'Profe Ana', rol: 'profesor' }, admin); const pa = r.data.id;
     r = await api('POST', '/api/usuarios', { username: 'profb', password: 'prof12345', nombre: 'Profe Beto', rol: 'profesor' }, admin); const pb = r.data.id;
     r = await api('POST', '/api/login', { username: 'profa', password: 'prof12345' }); const tA = r.data.token;
@@ -100,7 +100,7 @@ async function esperar() { for (let i = 0; i < 60; i++) { try { await fetch(BASE
     assert.equal(r.data.creados, 2); assert.equal(r.data.accesos.length, 2); assert.equal(r.data.sync.estado, 'sin_conexion'); paso('cada alumno importado recibe su acceso y se informa que la PC no está conectada a la web');
     { const { DatabaseSync } = require('node:sqlite'); const x = new DatabaseSync(require('path').join(D, 'omega.db')); x.exec("DELETE FROM usuarios WHERE username = 'importada.uno'"); x.close(); }
     r = await api('POST', '/api/clientes', { nombre: 'Alta Pantalla', precio_plan: 1000, crear_acceso: false }, admin); assert.equal(r.status, 200, JSON.stringify(r.data)); assert.ok(r.data.acceso && r.data.acceso.usuario, JSON.stringify(r.data)); paso('el alta por pantalla siempre crea el usuario de la app');
-    r = await api('POST', '/api/clientes/importar', { filas: [{ nombre: 'Fila ok' }, { nombre: '' }, { nombre: 'Fila ok dos' }] }, admin); assert.equal(r.data.creados, 2); assert.equal(r.data.errores.length, 1); paso('una fila con error no frena ni deja a medias a las demás');
+    r = await api('POST', '/api/clientes/importar', { filas: [{ nombre: 'Fila ok' }, { nombre: '' }, { nombre: 'Fila ok dos' }] }, admin); assert.equal(r.data.rechazado, true); assert.equal(r.data.errores.length, 1); r = await api('POST', '/api/clientes/importar', { filas: [{ nombre: 'Fila ok' }, { nombre: 'Fila ok dos' }] }, admin); assert.equal(r.data.creados, 2); assert.equal(r.data.errores.length, 0); paso('una fila con error no frena ni deja a medias a las demás');
 
     console.log('Rutinas anteriores sin creador');
     r = await api('GET', '/api/rutinas', undefined, tA); assert.ok(r.data.every(x => 'editable' in x)); paso('el listado general informa quién puede editar cada una');

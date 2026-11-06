@@ -1,10 +1,10 @@
 'use strict';
 const { diffDays, lunesDe, addMeses, mesesEntre } = require('./util');
 
-// Fecha de baja efectiva: si no se cargó, se completa automáticamente (alta + 1 mes)
+// Fecha de baja efectiva: si no se cargó, se completa con la fecha de alta (V10)
 // y se corre un mes con cada renovación (la renovación actualiza fecha_baja).
 function bajaEfectiva(c) {
-  return c.fecha_baja || addMeses(c.fecha_alta, 1);
+  return c.fecha_baja || c.fecha_alta; // V10: sin baja cargada = fecha de alta
 }
 
 // Semáforo 1 – estado del alta

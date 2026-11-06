@@ -15,9 +15,40 @@ function plantillaDe(fecha) {
 }
 const IDX_PLANTILLA = { A: 0, B: 1, C: 2 };
 const PLANTILLAS = { A: [], B: [], C: [] };   // (compatibilidad: ya no son fijas; dependen de los patrones y las estaciones de cada formato)
+// V10: reparte los estímulos de un grupo entre los 3 días tipo (A, B, C) según las veces por semana (0 a 3) que definió quien arma los circuitos.
+// claves: estímulos permitidos; frec: { clave: veces } (lo que falta vale 2, el estándar); N: tope de lugares por día (null = sin tope).
+function repartirFrecuencias(claves, frec, N, fecha, avisos, nombres) {
+  const w = Math.floor(Date.parse(semana.lunesDeFecha(fecha)) / (7 * 86400000));
+  let items = claves.map(c => ({ c, n: Math.max(0, Math.min(3, frec && frec[c] !== undefined ? frec[c] : 2)) })).filter(x => x.n > 0);
+  const dias = [[], [], []], falto = [];
+  // dentro de cada frecuencia el orden rota cada semana: así, si no entra todo, no queda siempre afuera el mismo
+  const grupos = [3, 2, 1].map(n => { const g = items.filter(x => x.n === n); if (!g.length) return g; const r = w % g.length; return g.slice(r).concat(g.slice(0, r)); });
+  items = [].concat(...grupos);
+  items.forEach((it, j) => {
+    const orden = [0, 1, 2].sort((a, b) => dias[a].length - dias[b].length || ((a - j) % 3 + 3) % 3 - ((b - j) % 3 + 3) % 3);
+    let puestos = 0;
+    for (const d of orden) { if (puestos >= it.n) break; if (N && dias[d].length >= N) continue; dias[d].push(it.c); puestos++; }
+    if (puestos < it.n) falto.push({ c: it.c, puestos, n: it.n });
+  });
+  if (N) dias.forEach((lista, d) => { // si sobran estaciones se completan con los de mayor frecuencia que todavía no están ese día
+    let k = 0;
+    while (lista.length < N && items.length && k < 200) { const c = items[(d + k) % items.length]; k++; if (!lista.includes(c.c) || k > items.length) lista.push(c.c); }
+  });
+  if (avisos && falto.length) avisos.push('Con ' + N + ' estaciones no entran todas las frecuencias pedidas: ' + falto.map(x => (nombres && nombres[x.c]) || x.c).join(', ') + ' se trabaja menos veces por semana de lo definido. Subí las estaciones o bajá alguna frecuencia.');
+  return dias;
+}
+const hayFrec = (f, g) => f.frecuencias && f.frecuencias[g] && Object.keys(f.frecuencias[g]).length > 0;
+
 // Patrones (claves) de las estaciones de un formato para una fecha
 function patronesDelDia(fecha, f, avisos) {
   const N = Math.max(1, f.estaciones || 5);
+  if (hayFrec(f, 'patrones')) {
+    const perm = f.patrones && f.patrones.length ? f.patrones : [...est.CLAVES.patrones];
+    if (perm.some(c => (f.frecuencias.patrones[c] ?? 2) > 0)) {
+      const nombres = Object.fromEntries(est.PATRONES.map(p => [p.clave, p.nombre]));
+      return repartirFrecuencias(perm, f.frecuencias.patrones, N, fecha, avisos, nombres)[IDX_PLANTILLA[plantillaDe(fecha)]];
+    }
+  }
   let permitidos = f.patrones && f.patrones.length ? [...f.patrones] : [...est.CLAVES.patrones];
   const k = permitidos.length;
   if (2 * k > 3 * N) {
@@ -92,6 +123,11 @@ function construirCircuito(fecha, formatoId) {
   const capSel = formato.capacidades.length ? formato.capacidades : est.CLAVES.capacidades;
   const enSel = formato.energias.length ? formato.energias : est.CLAVES.energias;
   const t = IDX_PLANTILLA[plantillaDe(fecha)];
+  // V10: las capacidades y los sistemas energéticos que se priorizan ese día salen de sus frecuencias semanales (si se definieron)
+  const deldia = (sel, g) => { if (!hayFrec(formato, g)) return sel; const l = repartirFrecuencias(sel, formato.frecuencias[g], null, fecha, null)[t]; return l && l.length ? l : sel; };
+  const capDia = deldia(capSel, 'capacidades'), enDia = deldia(enSel, 'energias');
+  // Hark Pro: preferencias aprendidas de la planificación manual (solo cuando terminó el período de aprendizaje); 0 si está apagado
+  const aprendido = require('./hark').bonus((get('SELECT profesor_id FROM sesiones WHERE fecha = ? AND formato_id = ? AND profesor_id IS NOT NULL LIMIT 1', fecha, formatoId) || {}).profesor_id);
   const todos = all('SELECT ' + COLS_PLAN + ' FROM ejercicios WHERE activo = 1');
 
   // usos cercanos (en ambos sentidos, por si ya hay semanas posteriores planificadas)
@@ -116,7 +152,7 @@ function construirCircuito(fecha, formatoId) {
   const slots = [];
   claves.forEach((clave, i) => {
     const zona = est.zonaDeClave(clave);
-    const objCap = capSel[(i + t) % capSel.length], objEn = enSel[(i + t + 1) % enSel.length];
+    const objCap = capDia[(i + t) % capDia.length], objEn = enDia[(i + t + 1) % enDia.length];
     const pool = todos.filter(e => e.zona === zona && !elegidos.some(x => x.id === e.id));
     const dura = (e) => !minInt || (RANGO_INT[e.intensidad] || 1) >= minInt;       // clases HIIT: ejercicios que suben las pulsaciones
     const encaja = (e) => capsDe(e).some(c => capSel.includes(c)) && ensDe(e).some(c => enSel.includes(c));
@@ -136,8 +172,8 @@ function construirCircuito(fecha, formatoId) {
       if (cand.length) {
         // preferir los que cumplen el objetivo de capacidad y energía de esta estación, y los que hace más tiempo no se usan
         const punt = (e) => (capsDe(e).includes(objCap) ? 2 : 0) + (ensDe(e).includes(objEn) ? 1 : 0);
-        const ord = cand.map(e => ({ e, p: punt(e), d: ultimaVez.has(e.id) ? ultimaVez.get(e.id) : 9999 })).sort((a, b) => (b.p - a.p) || (b.d - a.d));
-        const mejor = ord.filter(x => x.p === ord[0].p && x.d === ord[0].d).map(x => x.e);
+        const ord = cand.map(e => ({ e, p: punt(e), h: aprendido(e.id), d: ultimaVez.has(e.id) ? ultimaVez.get(e.id) : 9999 })).sort((a, b) => (b.p - a.p) || (b.h - a.h) || (b.d - a.d));
+        const mejor = ord.filter(x => x.p === ord[0].p && x.h === ord[0].h && x.d === ord[0].d).map(x => x.e);
         elegido = elegirAleatorio(mejor);
         if (et.aviso && !advertencias.includes(et.aviso)) advertencias.push(et.aviso);
         break;
@@ -326,7 +362,7 @@ function sugerencias(circuitoId, slot, zona) {
     .sort((a, b) => (b.alcanza_equipo - a.alcanza_equipo) || ((b.dias_desde_uso ?? 9999) - (a.dias_desde_uso ?? 9999)));
 }
 
-function reemplazarSlot(circuitoId, slot, ejercicioId) {
+function reemplazarSlot(circuitoId, slot, ejercicioId, usuarioId) {
   const circ = get('SELECT * FROM circuitos WHERE id = ?', circuitoId);
   if (!circ) { const e = new Error('Circuito no encontrado'); e.status = 404; throw e; }
   const slots = JSON.parse(circ.slots);
@@ -347,6 +383,10 @@ function reemplazarSlot(circuitoId, slot, ejercicioId) {
     if (!slots.some(s => s.ejercicio_id === viejo)) run('DELETE FROM uso_ejercicio WHERE ejercicio_id = ? AND formato_id = ? AND fecha = ?', viejo, circ.formato_id, circ.fecha);
     run('INSERT OR IGNORE INTO uso_ejercicio (ejercicio_id, formato_id, fecha) VALUES (?,?,?)', nuevo.id, circ.formato_id, circ.fecha);
   });
+  try { // Hark Pro: queda anotado qué eligió y qué sacó el profesor (solo si está en período de aprendizaje)
+    const ses = get('SELECT profesor_id FROM sesiones WHERE fecha = ? AND formato_id = ? LIMIT 1', circ.fecha, circ.formato_id);
+    require('./hark').registrarCambio({ usuario_id: usuarioId, profesor_id: ses && ses.profesor_id, formato_id: circ.formato_id, fecha_clase: circ.fecha, patron: est.claveDeZona(nuevo.zona), antes_id: viejo, despues_id: nuevo.id });
+  } catch (_) {}
   return circuitoPorId(circuitoId);
 }
 
@@ -367,4 +407,4 @@ function faltantesEquipo(circuito, asistentes) {
   return out;
 }
 
-module.exports = { sincronizarSesiones, aplicarSemana, patronesDelDia, cfgFormato, modoPlanificacion, PLANTILLAS, plantillaDe, generarRango, claseDelDia, circuitoPorId, sugerencias, reemplazarSlot, faltantesEquipo, formatosSinConfigurar, cfg };
+module.exports = { repartirFrecuencias, sincronizarSesiones, aplicarSemana, patronesDelDia, cfgFormato, modoPlanificacion, PLANTILLAS, plantillaDe, generarRango, claseDelDia, circuitoPorId, sugerencias, reemplazarSlot, faltantesEquipo, formatosSinConfigurar, cfg };

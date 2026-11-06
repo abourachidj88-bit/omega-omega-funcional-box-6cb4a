@@ -17,8 +17,10 @@ function pantallaAcceso(estado) {
       <div class="err" id="acceso-err"></div>
       <button class="primary big" style="width:100%">${primera ? 'Crear administrador' : 'Ingresar'}</button>
     </form>
+    ${primera ? '' : '<p class="center small" style="margin:12px 0 0"><a href="#" id="olvide">Olvidé mi contraseña</a></p>'}
   ${window.OMEGA_DEMO && !primera ? demoAccesos() : ''}<p class="center small muted" style="margin:14px 0 0">${esc(estado.version || '')}</p></div></div>`;
   $$('[data-demo-user]').forEach(b => b.onclick = () => { const f = $('#f-acceso'); f.username.value = b.dataset.demoUser; f.password.value = b.dataset.demoPass; f.requestSubmit(); });
+  const ol = $('#olvide'); if (ol) ol.onclick = (e) => { e.preventDefault(); recuperarClave(); };
   $('#f-acceso').onsubmit = async (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target));
@@ -43,6 +45,32 @@ function pantallaAcceso(estado) {
       render();
       if (window.__altaPendiente) { window.__altaPendiente = false; try { const e = await api('GET', '/sync/estado'); if (e.nodo === 'pc' && !e.configurado && !window.OMEGA_DEMO) ofrecerSincronizar(); } catch (_) {} }
     } catch (ex) { err.textContent = ex.message; btn.disabled = false; }
+  };
+}
+
+// Recuperar la contraseña del administrador con las 3 preguntas de seguridad (Ajustes → Seguridad)
+async function recuperarClave() {
+  let d; try { d = await api('GET', '/recuperar/preguntas', undefined, { noRedirect: true }); } catch (e) { toast(e.message); return; }
+  if (!d.configurada) { modal('Olvidé mi contraseña', '<p>Todavía no hay preguntas de seguridad configuradas, así que no se puede recuperar la contraseña desde acá.</p><p class="muted small">Un administrador puede cargarlas en <b>Ajustes → Seguridad</b>. Si nadie las configuró, hay que restablecer la clave desde la copia de seguridad o con soporte.</p><div class="row"><button class="primary" data-close>Entendido</button></div>'); return; }
+  if (d.bloqueado_min) { modal('Olvidé mi contraseña', `<div class="warnbox">Hubo demasiados intentos fallidos. Probá de nuevo en ${d.bloqueado_min} minutos.</div><div class="row" style="margin-top:10px"><button class="primary" data-close>Cerrar</button></div>`); return; }
+  const m = modal('Olvidé mi contraseña', `<p class="muted">Respondé las 3 preguntas que configuraste en Ajustes → Seguridad. Tenés que acertar las 3.</p>
+    <form id="f-rec" class="stack">
+      <div class="field"><label>Usuario del administrador</label><input name="username" autocapitalize="none" required></div>
+      ${d.preguntas.map((q, i) => `<div class="field"><label>${i + 1}. ${esc(q.texto)}</label><select name="r${i}" required><option value="">— Elegí —</option>${q.opciones.map(o => `<option>${esc(o)}</option>`).join('')}</select></div>`).join('')}
+      <div class="field"><label>Nueva contraseña (mínimo 8 caracteres)</label><input type="password" name="nueva" minlength="8" autocomplete="new-password" required></div>
+      <div class="field"><label>Repetí la nueva contraseña</label><input type="password" name="nueva2" autocomplete="new-password" required></div>
+      <div class="err" id="rec-err"></div>
+      <div class="row"><button class="primary">Cambiar contraseña</button><button type="button" data-close>Cancelar</button></div>
+    </form>`);
+  $$('[data-close]', m).forEach(b => b.onclick = () => m.close());
+  const f = $('#f-rec', m); if (!f) return;
+  f.onsubmit = async (e) => {
+    e.preventDefault(); const err = $('#rec-err', m); err.textContent = '';
+    if (f.nueva.value !== f.nueva2.value) { err.textContent = 'Las contraseñas no coinciden'; return; }
+    try {
+      await api('POST', '/recuperar/reset', { username: f.username.value, respuestas: d.preguntas.map((q, i) => ({ id: q.id, respuesta: f['r' + i].value })), nueva: f.nueva.value }, { noRedirect: true });
+      m.close(); toast('Contraseña cambiada. Ya podés ingresar con la nueva.');
+    } catch (ex) { err.textContent = ex.message; }
   };
 }
 

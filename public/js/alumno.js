@@ -14,6 +14,7 @@ vista('/', ['cliente'], async (main) => {
       <div class="card"><div class="small muted">Tu asistencia</div><div class="row" style="margin-top:4px"><span class="pill ${esc(p.semaforo_asistencia)}">${dot(p.semaforo_asistencia)} ${esc(p.texto_asistencia)}</span></div>
         <div style="margin-top:8px">Objetivo: 3 clases por semana · cumplís el <b>${p.cumplimiento_objetivo}%</b></div></div></div>
     ${prox ? `<div class="card" style="margin-top:14px;cursor:pointer" onclick="ir('#/entrenamiento/${hoyAR()}/${prox.hora}')"><div class="small muted">Próxima clase de hoy</div><div class="row between"><div><b style="font-size:1.2rem">${hh(prox.hora)}</b> ${chipFormato(prox.formato)}</div><span class="pill">Ver ejercicios ›</span></div></div>` : ''}`;
+  if (p.whatsapp_gym) main.insertAdjacentHTML('beforeend', `<div class="card" style="margin-top:14px"><a class="btn wa" href="${esc(p.whatsapp_gym)}" target="_blank" rel="noopener">${ICONO_WA} Chatear con el gimnasio</a><span class="small muted" style="margin-left:8px">Consultas, cambios de horario, dudas.</span></div>`);
   async function qr() {
     try { const r = await api('GET', '/mi-qr'); const el = $('#qr', main); if (el) el.innerHTML = `<div style="width:min(72vw,300px)">${qrSvg(r.codigo)}</div>`; } catch (e) { const el = $('#qr', main); if (el) el.innerHTML = '<span class="t-rojo small">' + esc(e.message) + '</span>'; }
   }
@@ -25,14 +26,24 @@ vista('/entrenamiento/:fecha/:hora', ['cliente'], (main, { fecha, hora }) => { c
 
 async function entrenamiento(main, fecha, hora) {
   const d = await api('GET', '/clase?fecha=' + fecha);
-  if (hora === null) { const base = fecha === hoyAR() ? ahoraAR().hora : 0; const c = d.clases.find(x => x.hora >= base) || d.clases[d.clases.length - 1]; hora = c ? c.hora : null; }
+  if (hora === null) {
+    const esHoy = fecha === hoyAR(), base = esHoy ? ahoraAR().hora : 0;
+    let c = d.clases.find(x => x.hora >= base);
+    // hoy ya no quedan clases (o es fuera de horario): se muestra la próxima clase disponible, que puede ser de otro día
+    if (!c && esHoy && !(d.rutina_libre && !d.clases.length)) {
+      for (let i = 1; i <= 7; i++) { const f = sumaDias(fecha, i); const n = await api('GET', '/clase?fecha=' + f); if (n.clases.length) { ir('#/entrenamiento/' + f + '/auto'); return; } }
+    }
+    if (!c) c = d.clases[d.clases.length - 1];
+    hora = c ? c.hora : null;
+  }
   const cls = d.clases.find(c => c.hora === hora) || null;
   const verRutinaLibre = hora === -1 && d.rutina_libre;
   main.innerHTML = `
     <div class="page-title"><h1>Entrenamiento</h1></div>
     <div class="row" style="margin-bottom:10px"><button class="sm" id="ant">‹</button><b>${fmtFlargo(fecha)}</b><button class="sm" id="sig">›</button>${fecha !== hoyAR() ? '<button class="sm ghost" id="hoy">Hoy</button>' : ''}</div>
     ${d.clases.length || d.rutina_libre ? `<div class="quick">${d.clases.map(c => `<button data-h="${c.hora}" class="${c.hora === hora ? 'on' : ''}">${hh(c.hora)}</button>`).join('')}${d.rutina_libre ? `<button data-h="rutina" class="${hora === -1 ? 'on' : ''}">🏋 Rutina</button>` : ''}</div>` : '<div class="empty">No hay clases este día.</div>'}
-    <div id="det"></div>`;
+    <div id="det"></div>
+    ${d.whatsapp_gym ? `<div class="card" style="margin-top:14px"><a class="btn wa" href="${esc(d.whatsapp_gym)}" target="_blank" rel="noopener">${ICONO_WA} Chatear con el gimnasio</a><span class="small muted" style="margin-left:8px">¿Dudas sobre la clase?</span></div>` : ''}`;
   $('#ant', main).onclick = () => ir('#/entrenamiento/' + sumaDias(fecha, -1) + '/auto');
   $('#sig', main).onclick = () => ir('#/entrenamiento/' + sumaDias(fecha, 1) + '/auto');
   const hb = $('#hoy', main); if (hb) hb.onclick = () => ir('#/entrenamiento');

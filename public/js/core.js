@@ -210,6 +210,45 @@ function aFechaISO(v) {
   if (m) { let y = Number(m[3]); if (y < 100) y += 2000; return y + '-' + String(m[2]).padStart(2, '0') + '-' + String(m[1]).padStart(2, '0'); }
   return '';
 }
+// Versión 9: fecha con formato fijo DD/MM/AAAA. Se puede escribir (las barras se completan solas) o elegir en el calendario.
+// El campo con `name` guarda la fecha ya en formato AAAA-MM-DD (vacío si no hay fecha o es inválida).
+function fechaDMA(iso) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || '')); return m ? m[3] + '/' + m[2] + '/' + m[1] : ''; }
+function dmaAIso(t) {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(t || '').trim()); if (!m) return null;
+  const d = +m[1], mo = +m[2], a = +m[3]; if (a < 1990 || a > 2100 || mo < 1 || mo > 12 || d < 1 || d > new Date(Date.UTC(a, mo, 0)).getUTCDate()) return null;
+  return m[3] + '-' + m[2] + '-' + m[1];
+}
+function campoFecha(name, iso, opts = {}) {
+  return `<div class="fecha-dma" data-fecha="${esc(name)}"><input type="text" class="fd-txt" inputmode="numeric" maxlength="10" placeholder="DD/MM/AAAA" autocomplete="off" value="${esc(fechaDMA(iso))}" ${opts.required ? 'required' : ''} aria-label="${esc(opts.label || 'Fecha')} (DD/MM/AAAA)">
+    <button type="button" class="fd-cal" title="Elegir en el calendario" aria-label="Abrir calendario">📅</button>
+    <input type="date" class="fd-pick" tabindex="-1" aria-hidden="true" value="${esc(iso || '')}"><input type="hidden" name="${esc(name)}" value="${esc(iso || '')}"></div>`;
+}
+function enlazarFechas(raiz) {
+  $$('.fecha-dma', raiz).forEach(w => {
+    if (w.dataset.ok) return; w.dataset.ok = '1';
+    const t = $('.fd-txt', w), pick = $('.fd-pick', w), hid = $('input[type=hidden]', w);
+    const sync = () => {
+      const v = t.value.trim();
+      const iso = v === '' ? '' : dmaAIso(v);
+      hid.value = iso || '';
+      t.setCustomValidity(v !== '' && !iso ? 'Fecha inválida: usá el formato DD/MM/AAAA' : '');
+      t.classList.toggle('inv', v !== '' && !iso);
+      if (iso) pick.value = iso;
+    };
+    t.addEventListener('input', () => {
+      // Si ya hay 8 dígitos y se escribe uno más en el medio, se descarta (no se corre el año): para cambiar un dígito hay que borrarlo antes.
+      if (t.value.replace(/\D/g, '').length > 8 && t._ult !== undefined) { const c = Math.max(0, (t.selectionStart || 1) - 1); t.value = t._ult; try { t.setSelectionRange(c, c); } catch (_) {} return; }
+      let d = t.value.replace(/\D/g, '').slice(0, 8);
+      if (t.value.length >= (t._prev || 0)) { if (d.length > 4) d = d.slice(0, 2) + '/' + d.slice(2, 4) + '/' + d.slice(4); else if (d.length > 2) d = d.slice(0, 2) + '/' + d.slice(2); }
+      else d = t.value;
+      t.value = d; t._prev = d.length; t._ult = d; sync();
+    });
+    $('.fd-cal', w).onclick = () => { try { if (pick.showPicker) pick.showPicker(); else pick.focus(); } catch (_) { pick.focus(); } };
+    pick.addEventListener('change', () => { t.value = fechaDMA(pick.value); t._prev = t.value.length; t._ult = t.value; sync(); });
+    t._ult = t.value; t._prev = t.value.length;
+    sync();
+  });
+}
 function campo(label, html, extra = '') { return `<div class="field ${extra}"><label>${label}</label>${html}</div>`; }
 function copiarTexto(t) {
   const ok = () => toast('Copiado');

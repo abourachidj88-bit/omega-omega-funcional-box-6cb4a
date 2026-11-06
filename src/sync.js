@@ -7,8 +7,8 @@ const crypto = require('node:crypto');
 const OFFSET_NUBE = 1000000000; // los ids creados en la nube arrancan en 1.000.000.000 para no chocar con los de la PC
 const NODO = (typeof process !== 'undefined' && process.env && process.env.OMEGA_NODO === 'nube') ? 'nube' : 'pc';
 const EXCLUIR_TABLAS = new Set(((typeof process !== 'undefined' && process.env && process.env.SYNC_EXCLUIR) || '').split(',').map(s => s.trim()).filter(Boolean));
-const CLAVES_LOCALES = /^(secreto|epoch|ultimo_backup.*|version_app|sync_.*|nodo.*)$/;
-const NO_SINCRONIZAR = new Set(['sync_log', 'sync_estado', 'sync_ctl', 'sqlite_sequence']);
+const CLAVES_LOCALES = /^(secreto|epoch|ultimo_backup.*|version_app|sync_.*|nodo.*|hark_.*)$/;
+const NO_SINCRONIZAR = new Set(['sync_log', 'sync_estado', 'sync_ctl', 'sqlite_sequence', 'hark_cambios', 'hark_wa_msgs']);
 const LOTE = 250;
 
 let _db = null; // se completa en instalar()

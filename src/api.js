@@ -16,6 +16,7 @@ const v1 = require('./api-v1');
 const v2 = require('./api-v2');
 const telefono = require('./telefono');
 const permisos = require('./permisos');
+const validarImport = require('./validar-import');
 const normTel = (v) => telefono.normalizar(v, getConfig('prefijo', '54'));
 const { PATRON_ZONA } = require('./seed-ejercicios-v1');
 
@@ -48,7 +49,7 @@ function enriquecerCliente(c, hoy, ultima, total, user) {
   const ss = semaforoAsistencia(ultima ? ultima.fecha : null, c, hoy);
   const out = {
     id: c.id, nombre: c.nombre, foto: c.foto || null, fecha_alta: c.fecha_alta, fecha_baja: bajaEfectiva(c),
-    celular: c.celular || '', instagram: c.instagram || '', falta_pago: !!c.falta_pago && semaforoAlta(c, hoy).color === 'verde',
+    celular: c.celular || '', instagram: c.instagram || '', alias_wa: c.alias_wa || '', falta_pago: !!c.falta_pago && Number(c.precio_plan) > 0 && semaforoAlta(c, hoy).color === 'verde',
     ultima_clase: ultima ? ultima.fecha + ' ' + String(ultima.hora).padStart(2, '0') + ':00' : null,
     total_asistencias: total || 0,
     semaforo_alta: sa.color, estado_alta: sa.estado, meses_baja: sa.mesesBaja, dias_baja: sa.diasBaja,
@@ -120,10 +121,10 @@ function crearCliente(b, user) {
   if (!nombre) throw bad('El nombre y apellido es obligatorio');
   const alta = requireFecha(b.fecha_alta || nowAR().fecha, 'fecha de alta');
   const precio = user.rol === 'admin' ? Math.max(0, num(b.precio_plan)) : 0;
-  const baja = fechaOpc(b.fecha_baja) || addMeses(alta, 1);
+  const baja = fechaOpc(b.fecha_baja) || alta; // V10: baja vacía = fecha de alta (el cliente vence al día siguiente)
   const planId = user.rol === 'admin' && b.plan_id ? Number(b.plan_id) : null;
-  const r = run('INSERT INTO clientes (nombre, foto, fecha_alta, precio_plan, fecha_baja, celular, instagram, creado, plan_id) VALUES (?,?,?,?,?,?,?,?,?)',
-    nombre, validarFoto(b.foto), alta, precio, baja, normTel(str(b.celular, 40)) || null, str(b.instagram, 60).replace(/^@/, '') || null, new Date().toISOString(), planId);
+  const r = run('INSERT INTO clientes (nombre, foto, fecha_alta, precio_plan, fecha_baja, celular, instagram, creado, plan_id, alias_wa) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    nombre, validarFoto(b.foto), alta, precio, baja, normTel(str(b.celular, 40)) || null, str(b.instagram, 60).replace(/^@/, '') || null, new Date().toISOString(), planId, str(b.alias_wa, 200) || null);
   const id = Number(r.lastInsertRowid);
   let acceso = null;
   acceso = crearAccesoCliente(id, nombre, b.celular); // todo alumno dado de alta (por pantalla o importado) recibe su usuario de la app
@@ -149,18 +150,21 @@ function actualizarCliente(id, b, user) {
   if (!nombre) throw bad('El nombre y apellido es obligatorio');
   const foto = b.foto !== undefined ? validarFoto(b.foto) : c.foto;
   const alta = b.fecha_alta ? requireFecha(b.fecha_alta, 'fecha de alta') : c.fecha_alta;
-  const baja = b.fecha_baja !== undefined ? (fechaOpc(b.fecha_baja) || addMeses(alta, 1)) : c.fecha_baja;
+  const baja = b.fecha_baja !== undefined ? (fechaOpc(b.fecha_baja) || alta) : c.fecha_baja;
   const precio = user.rol === 'admin' && b.precio_plan !== undefined ? Math.max(0, num(b.precio_plan)) : c.precio_plan;
   // Alerta de deuda: se corrió la fecha de baja hacia adelante a mano y no hay un pago registrado hoy
   let faltaPago = c.falta_pago;
-  if (b.fecha_baja !== undefined && baja > bajaEfectiva(c)) {
+  // (un plan a $0 nunca se paga: no corresponde el aviso)
+  if (b.fecha_baja !== undefined && baja > bajaEfectiva(c) && Number(precio) > 0) {
     const hoy = nowAR().fecha;
     if (!get('SELECT 1 AS x FROM pagos WHERE cliente_id = ? AND fecha >= ?', id, hoy)) faltaPago = 1;
   }
-  run('UPDATE clientes SET nombre=?, foto=?, fecha_alta=?, precio_plan=?, fecha_baja=?, celular=?, instagram=?, plan_id=?, falta_pago=? WHERE id=?',
+  if (!(Number(precio) > 0)) faltaPago = 0;
+  run('UPDATE clientes SET nombre=?, foto=?, fecha_alta=?, precio_plan=?, fecha_baja=?, celular=?, instagram=?, alias_wa=?, plan_id=?, falta_pago=? WHERE id=?',
     nombre, foto, alta, precio, baja,
     b.celular !== undefined ? (normTel(str(b.celular, 40)) || null) : c.celular,
     b.instagram !== undefined ? (str(b.instagram, 60).replace(/^@/, '') || null) : c.instagram,
+    b.alias_wa !== undefined ? (str(b.alias_wa, 200) || null) : c.alias_wa,
     user.rol === 'admin' && b.plan_id !== undefined ? (b.plan_id ? Number(b.plan_id) : null) : c.plan_id, faltaPago, id);
   run('UPDATE usuarios SET nombre = ? WHERE cliente_id = ?', nombre, id);
 }
@@ -443,13 +447,27 @@ route('POST', '/api/clientes/:id/acceso', STAFF, ({ params }) => {
 // (nunca se borra lo que ya tenía) y si es nuevo se da de alta con su acceso a la app web. Importar de nuevo no duplica.
 const claveNombre = (n) => String(n || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const ultimos8 = (t) => soloDigitos(t).slice(-8);
+// Revisión previa del archivo (no carga nada): devuelve los errores por fila y las filas repetidas
+route('POST', '/api/clientes/importar/validar', STAFF, async ({ req }) => {
+  const b = await readBody(req, 25 * 1024 * 1024);
+  const filas = Array.isArray(b.filas) ? b.filas : [];
+  if (!filas.length) throw bad('El archivo no tiene filas para importar');
+  if (filas.length > 5000) throw bad('Máximo 5000 filas por importación');
+  const r = validarImport.validarClientes(filas, all('SELECT * FROM planes WHERE activo = 1'));
+  return { filas: filas.length, validas: r.validas.length, errores: r.errores.map(e => e.texto), detalle: r.errores, duplicadas: r.duplicadas };
+});
 route('POST', '/api/clientes/importar', STAFF, async ({ req, user }) => {
   const b = await readBody(req, 25 * 1024 * 1024);
   const filas = Array.isArray(b.filas) ? b.filas : [];
   if (!filas.length) throw bad('El archivo no tiene filas para importar');
   if (filas.length > 5000) throw bad('Máximo 5000 filas por importación');
-  const out = { creados: 0, actualizados: 0, sin_cambios: 0, errores: [], avisos: [], accesos: [] };
+  const out = { creados: 0, actualizados: 0, sin_cambios: 0, errores: [], avisos: [], accesos: [], duplicadas: [] };
   const planes = all('SELECT * FROM planes WHERE activo = 1');
+  // Versión 9: el archivo se revisa completo antes de cargar nada. Si alguna fila tiene un error de formato no se importa ninguna.
+  const rev = validarImport.validarClientes(filas, planes);
+  if (rev.errores.length) return { rechazado: true, errores: rev.errores.map(e => e.texto), detalle: rev.errores };
+  out.duplicadas = rev.duplicadas;
+  filas.length = 0; rev.validas.forEach(v => filas.push(v)); // desde acá solo se procesan las filas válidas y sin repetir
   const buscarPlan = (txt) => {
     const k = claveNombre(String(txt).replace(/\(.*$/, ''));
     return k ? planes.find(p => claveNombre(p.nombre) === k) || null : null;
@@ -457,7 +475,7 @@ route('POST', '/api/clientes/importar', STAFF, async ({ req, user }) => {
   const todos = all('SELECT id, nombre, celular FROM clientes');
   tx(() => {
     filas.forEach((f, i) => {
-      const fila = 'Fila ' + (i + 2);
+      const fila = 'Fila ' + (f.fila || (i + 2));
       run('SAVEPOINT fila_imp'); // si una fila falla no queda a medias (por ejemplo un alumno sin su acceso)
       try {
         const nombre = str(f.nombre, 120);
@@ -482,8 +500,8 @@ route('POST', '/api/clientes/importar', STAFF, async ({ req, user }) => {
         const precio = f.precio_plan !== undefined && f.precio_plan !== '' && f.precio_plan !== null ? f.precio_plan : (plan && esAdmin ? plan.precio_efectivo : undefined);
         const datos = {
           nombre,
-          fecha_alta: f.fecha_alta ? requireFecha(f.fecha_alta, 'fecha de alta') : undefined,
-          fecha_baja: f.fecha_baja ? requireFecha(f.fecha_baja, 'fecha de baja') : undefined,
+          fecha_alta: f.fecha_alta || undefined,
+          fecha_baja: f.fecha_baja || undefined,
           precio_plan: precio, plan_id: plan ? plan.id : undefined,
           celular: cel || undefined, instagram: str(f.instagram, 60) || undefined,
         };
@@ -569,6 +587,14 @@ route('DELETE', '/api/asistencias/:id', STAFF, ({ params }) => { run('DELETE FRO
 
 route('GET', '/api/dashboard', STAFF, ({ query }) => dashboard(query.fecha && esFecha(query.fecha) ? query.fecha : nowAR().fecha));
 
+// Enlace para que el alumno chatee con el WhatsApp del gimnasio. El mensaje ya viene con su nombre y su código OMEGA#id:
+// así Hark Pro, al leer el chat en la PC del gimnasio, reconoce quién es y guarda el alias con el que figura en WhatsApp.
+function waGimnasio(clienteId) {
+  const base = telefono.enlaceWA(getConfig('whatsapp_gym', ''), getConfig('prefijo', '54'));
+  if (!base) return '';
+  const c = clienteId ? get('SELECT id, nombre FROM clientes WHERE id = ?', clienteId) : null;
+  return c ? base + '?text=' + encodeURIComponent('Hola! Soy ' + c.nombre + ' (alumno OMEGA#' + c.id + ') ') : base;
+}
 // --- Cliente (app del alumno)
 route('GET', '/api/mi-qr', ['cliente'], ({ user }) => {
   if (!user.cliente_id) throw bad('Usuario sin ficha de alumno');
@@ -578,7 +604,7 @@ route('GET', '/api/mi-perfil', ['cliente'], ({ user }) => {
   const d = detalleCliente(user.cliente_id, { rol: 'cliente' });
   return { id: d.id, nombre: d.nombre, foto: d.foto, fecha_alta: d.fecha_alta, fecha_baja: d.fecha_baja, precio_plan: d.precio_plan ?? get('SELECT precio_plan FROM clientes WHERE id = ?', d.id).precio_plan,
     estado_alta: d.estado_alta, semaforo_alta: d.semaforo_alta, semaforo_asistencia: d.semaforo_asistencia, texto_asistencia: d.texto_asistencia,
-    whatsapp_gym: telefono.enlaceWA(getConfig('whatsapp_gym', ''), getConfig('prefijo', '54')), dias_restantes: diffDays(d.fecha_baja, nowAR().fecha), total_asistencias: d.total_asistencias, asistencias: d.asistencias.slice(0, 60), semanas: d.semanas, mensual: d.mensual, cumplimiento_objetivo: d.cumplimiento_objetivo };
+    whatsapp_gym: waGimnasio(user.cliente_id), dias_restantes: diffDays(d.fecha_baja, nowAR().fecha), total_asistencias: d.total_asistencias, asistencias: d.asistencias.slice(0, 60), semanas: d.semanas, mensual: d.mensual, cumplimiento_objetivo: d.cumplimiento_objetivo };
 });
 
 // --- Módulo 2: planificación
@@ -666,6 +692,15 @@ function validarImagen(v) {
   if (v.length > 420 * 1024) throw bad('La imagen es demasiado pesada (máximo 300 KB)');
   return v;
 }
+const EQUIPOS_BASE_DIBUJO = new Set(['cajon', 'banco', 'soga']);
+function posesDe(v) {
+  let r; try { r = validarImport.validarPoses(v); } catch (e) { throw bad(e.message); }
+  if (r) { // el equipamiento dibujado tiene que existir en la lista de equipamiento (o ser uno de los accesorios fijos del dibujo)
+    const claves = new Set(all('SELECT clave FROM equipamiento').map(x => x.clave));
+    for (const p of JSON.parse(r).poses) for (const it of p.eq) if (!claves.has(it.k) && !EQUIPOS_BASE_DIBUJO.has(it.k) && !['barra_dominadas', 'banda_rtx', 'colchoneta', 'conos'].includes(it.k)) throw bad('Equipamiento inválido en el dibujo: ' + it.k);
+  }
+  return r;
+}
 function validarIntensidad(v, def) {
   if (v === undefined || v === null || v === '') return def;
   if (!['baja', 'moderada', 'alta'].includes(v)) throw bad('Intensidad inválida');
@@ -687,9 +722,9 @@ route('POST', '/api/ejercicios', STAFF, async ({ req, user }) => {
   if (get('SELECT 1 AS x FROM ejercicios WHERE activo = 1 AND zona = ? AND nombre = ? COLLATE NOCASE', zona, nombre)) throw bad('Ya existe un ejercicio con ese nombre en ' + zona);
   const patron = validarPatron(b.patron, estim.ILUSTRACION[estim.claveDeZona(zona)] || 'sentadilla');
   const capac = estim.aTexto(estim.lista(b.capacidades ?? b.capacidad, estim.CLAVES.capacidades)) || 'fuerza', energ = estim.aTexto(estim.lista(b.energias ?? b.energia, estim.CLAVES.energias)) || 'aerobico';
-  const r = run("INSERT INTO ejercicios (zona, nombre, prog2, prog3, equipo, unidades, descripcion, patron, img1, img2, img3, origen, intensidad, capacidad, energia) VALUES (?,?,?,?,?,?,?,?,?,?,?,'propio',?,?,?)",
+  const r = run("INSERT INTO ejercicios (zona, nombre, prog2, prog3, equipo, unidades, descripcion, patron, img1, img2, img3, origen, intensidad, capacidad, energia, poses) VALUES (?,?,?,?,?,?,?,?,?,?,?,'propio',?,?,?,?)",
     zona, nombre, p2, p3, eq, Math.max(1, parseInt(b.unidades || 1, 10)), str(b.descripcion, 500) || null, patron,
-    validarImagen(b.img1) ?? null, validarImagen(b.img2) ?? null, validarImagen(b.img3) ?? null, validarIntensidad(b.intensidad, v2.intensidadDe(zona, patron, nombre)), capac, energ);
+    validarImagen(b.img1) ?? null, validarImagen(b.img2) ?? null, validarImagen(b.img3) ?? null, validarIntensidad(b.intensidad, v2.intensidadDe(zona, patron, nombre)), capac, energ, posesDe(b.poses) ?? null);
   return { id: Number(r.lastInsertRowid) };
 });
 route('PUT', '/api/ejercicios/:id', STAFF, async ({ req, params }) => {
@@ -703,10 +738,11 @@ route('PUT', '/api/ejercicios/:id', STAFF, async ({ req, params }) => {
   const capac = b.capacidades !== undefined || b.capacidad !== undefined ? (estim.aTexto(estim.lista(b.capacidades ?? b.capacidad, estim.CLAVES.capacidades)) || e.capacidad || 'fuerza') : e.capacidad;
   const energ = b.energias !== undefined || b.energia !== undefined ? (estim.aTexto(estim.lista(b.energias ?? b.energia, estim.CLAVES.energias)) || e.energia || 'aerobico') : e.energia;
   const img = (k) => { const v = validarImagen(b[k]); return v === undefined ? e[k] : v; };
-  run('UPDATE ejercicios SET zona=?, nombre=?, prog2=?, prog3=?, equipo=?, unidades=?, descripcion=?, patron=?, img1=?, img2=?, img3=?, intensidad=?, capacidad=?, energia=? WHERE id=?',
+  const poses = posesDe(b.poses);
+  run('UPDATE ejercicios SET zona=?, nombre=?, prog2=?, prog3=?, equipo=?, unidades=?, descripcion=?, patron=?, img1=?, img2=?, img3=?, intensidad=?, capacidad=?, energia=?, poses=? WHERE id=?',
     zona, str(b.nombre ?? e.nombre, 120) || e.nombre, str(b.prog2 ?? e.prog2, 120) || e.prog2, str(b.prog3 ?? e.prog3, 120) || e.prog3, eq,
     Math.max(1, parseInt(b.unidades ?? e.unidades, 10)), b.descripcion !== undefined ? (str(b.descripcion, 500) || null) : e.descripcion,
-    validarPatron(b.patron, e.patron || estim.ILUSTRACION[estim.claveDeZona(zona)] || 'sentadilla'), img('img1'), img('img2'), img('img3'), validarIntensidad(b.intensidad, e.intensidad || v2.intensidadDe(zona, e.patron, e.nombre)), capac, energ, e.id);
+    validarPatron(b.patron, e.patron || estim.ILUSTRACION[estim.claveDeZona(zona)] || 'sentadilla'), img('img1'), img('img2'), img('img3'), validarIntensidad(b.intensidad, e.intensidad || v2.intensidadDe(zona, e.patron, e.nombre)), capac, energ, poses === undefined ? e.poses : poses, e.id);
   return { ok: true };
 });
 route('DELETE', '/api/ejercicios/:id', ADM, ({ params }) => { run('UPDATE ejercicios SET activo = 0 WHERE id = ?', Number(params.id)); return { ok: true }; });
@@ -746,9 +782,9 @@ route('GET', '/api/planificacion/circuito/:id/sugerencias', STAFF, ({ params, qu
   if (!r) throw new HttpError(404, 'Circuito no encontrado');
   return r;
 });
-route('PUT', '/api/planificacion/circuito/:id/slot', STAFF, async ({ req, params }) => {
+route('PUT', '/api/planificacion/circuito/:id/slot', STAFF, async ({ req, params, user }) => {
   const b = await readBody(req);
-  return planner.reemplazarSlot(Number(params.id), parseInt(b.slot, 10), Number(b.ejercicio_id));
+  return planner.reemplazarSlot(Number(params.id), parseInt(b.slot, 10), Number(b.ejercicio_id), user && user.id);
 });
 route('POST', '/api/planificacion/circuito/:id/regenerar', STAFF, ({ params }) => {
   const c = get('SELECT * FROM circuitos WHERE id = ?', Number(params.id));
@@ -763,8 +799,9 @@ route('GET', '/api/clase', TODOS, ({ query, user }) => {
   // el alumno ve SUS rutinas (personalizadas); el personal ve las generales del día
   if (user.rol === 'cliente') {
     const mias = user.cliente_id ? v2.rutinasDeCliente(user.cliente_id, fecha) : [];
-    const clases = planner.claseDelDia(fecha).map(c => ({ ...c, rutina: c.formato ? (mias[0] || null) : null }));
-    return { fecha, clases, rutina_libre: mias[0] || null, rutinas: mias };
+    // el alumno solo ve las clases que existen en la agenda (las sesiones sin formato, como una asistencia cargada fuera de horario, no se muestran)
+    const clases = planner.claseDelDia(fecha).filter(c => c.formato).map(c => ({ ...c, rutina: mias[0] || null }));
+    return { fecha, clases, rutina_libre: mias[0] || null, rutinas: mias, whatsapp_gym: waGimnasio(user.cliente_id) };
   }
   const clases = planner.claseDelDia(fecha).map(c => ({ ...c, rutina: c.formato ? v2.rutinaDeDia(fecha, c.formato.id) : null }));
   return { fecha, clases, rutina_libre: v2.rutinaDeDia(fecha, 0) };
@@ -773,7 +810,7 @@ route('GET', '/api/grilla', TODOS, ({ query, user }) => {
   const desde = query.desde && esFecha(query.desde) ? query.desde : lunesDe(nowAR().fecha);
   return Array.from({ length: 7 }, (_, i) => {
     const f = addDays(desde, i);
-    const clases = planner.claseDelDia(f).map(c => { const pr = v1.profesorDeClase(f, c.hora); const rs = v2.reservasDeClase(f, c.hora, c.formato ? { id: c.formato.id } : null, user); return { sesion_id: c.sesion_id, hora: c.hora, formato: c.formato, planificada: !!c.circuito, profesor: pr ? pr.nombre : null, reservas: rs.total, reservada: rs.reservada, exceso_reservas: user.rol === 'cliente' ? undefined : rs.exceso, limite_reservas: user.rol === 'cliente' ? undefined : rs.limite, rutina: c.formato ? !!v2.rutinaDeDia(f, c.formato.id) : false }; });
+    const clases = planner.claseDelDia(f).filter(c => user.rol !== 'cliente' || c.formato).map(c => { const pr = v1.profesorDeClase(f, c.hora); const rs = v2.reservasDeClase(f, c.hora, c.formato ? { id: c.formato.id } : null, user); return { sesion_id: c.sesion_id, hora: c.hora, formato: c.formato, planificada: !!c.circuito, profesor: pr ? pr.nombre : null, reservas: rs.total, reservada: rs.reservada, exceso_reservas: user.rol === 'cliente' ? undefined : rs.exceso, limite_reservas: user.rol === 'cliente' ? undefined : rs.limite, rutina: c.formato ? !!v2.rutinaDeDia(f, c.formato.id) : false }; });
     return { fecha: f, dia: dowDe(f), clases };
   });
 });
@@ -820,6 +857,8 @@ require('./api-v4').registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, r
 require('./api-v6').registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str });
 require('./api-v7').registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str });
 require('./api-v8').registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str });
+require('./api-v9').registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str });
+require('./api-v10').registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str });
 require('./api-v4').registrarV5({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str });
 require('./api-v3').registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str, num, requireFecha, fechaOpc, soloDigitos, normTel, claseAhora, registrarAsistencia, semaforoAlta, horasDeAgenda, asegurarSesion });
 // ------------------------------------------------------------ despacho

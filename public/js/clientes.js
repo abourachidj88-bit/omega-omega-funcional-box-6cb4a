@@ -28,28 +28,45 @@ vista('/clientes', ['admin', 'profesor'], async (main) => {
 // ----- Importar desde Excel / Sheets (archivo .xlsx, .xls o .csv)
 // Dos caminos: la planilla modelo de OMEGA (con lista desplegable de planes) o cualquier otro archivo de la PC.
 // Solo el nombre y apellido es obligatorio. Importar otra vez el mismo archivo (o uno con más datos) no duplica: actualiza.
+// Valor de una celda de fecha → texto DD/MM/AAAA tal como lo vería quien lo cargó (si no es una fecha, se devuelve el texto para que el validador lo marque)
+function celdaFecha(v) {
+  if (v instanceof Date) return fechaDMA(aFechaISO(v));
+  if (typeof v === 'number') return v > 20000 && v < 80000 ? fechaDMA(aFechaISO(v)) : String(v);
+  return String(v).trim();
+}
 function leerFilasClientes(wb) {
   const nombreHoja = wb.SheetNames.find(n => norm(n) === 'clientes') || wb.SheetNames[0];
   const filasRaw = XLSX.utils.sheet_to_json(wb.Sheets[nombreHoja], { defval: '' });
-  return filasRaw.map(r => {
+  const out = [];
+  filasRaw.forEach((r, idx) => {
     const o = { nombre: '', apellido: '' };
+    let hayDato = false;
     for (const [k, v] of Object.entries(r)) {
       const n = norm(k);
-      if (v === '' || v === null || v === undefined) continue;
+      if (v === '' || v === null || v === undefined || (typeof v === 'string' && !v.trim())) continue;
+      hayDato = true;
       if (n.includes('apellido')) o.apellido = String(v).trim();
       else if (n.includes('nombre') || n.includes('alumno') || n.includes('cliente')) o.nombre = String(v).trim();
-      else if (n.includes('baja') || n.includes('vencim')) o.fecha_baja = aFechaISO(v);
-      else if (n.includes('alta') || n.includes('ingreso') || n.includes('inicio')) o.fecha_alta = aFechaISO(v);
+      else if (n.includes('baja') || n.includes('vencim')) o.fecha_baja = celdaFecha(v);
+      else if (n.includes('alta') || n.includes('ingreso') || n.includes('inicio')) o.fecha_alta = celdaFecha(v);
       else if (n.includes('precio') || n.includes('cuota') || n.includes('monto') || n.includes('importe') || n.includes('valor')) o.precio_plan = v;
       else if (n === 'plan' || n.includes('plan') || n.includes('abono') || n.includes('membresia')) o.plan = String(v).trim();
       else if (n.includes('cel') || n.includes('tel') || n.includes('contacto') || n.includes('whats') || n.includes('movil')) o.celular = String(v).trim();
       else if (n.includes('insta')) o.instagram = String(v).trim();
     }
+    if (!hayDato) return; // fila vacía: se ignora
     const nom = o.nombre && o.apellido && !norm(o.nombre).includes(norm(o.apellido)) ? o.nombre + ' ' + o.apellido : (o.nombre || o.apellido);
-    const f = { nombre: nom };
+    const f = { fila: idx + 2, nombre: nom };
     for (const k of ['fecha_alta', 'fecha_baja', 'precio_plan', 'plan', 'celular', 'instagram']) if (o[k] !== undefined && o[k] !== '') f[k] = o[k];
-    return f;
-  }).filter(r => r.nombre);
+    out.push(f);
+  });
+  return out;
+}
+// Lista de errores del archivo (una línea por problema, con el número de fila del Excel)
+function cajaErroresImport(errores, titulo) {
+  return `<div class="warnbox" style="margin-top:10px" role="alert"><b>⚠ ${esc(titulo || 'El archivo tiene errores y no se importó nada')}</b>
+    <div class="small" style="margin:4px 0 6px">Hay <b>${errores.length}</b> ${errores.length === 1 ? 'problema' : 'problemas'}. Corregilos en el Excel y volvé a subir el archivo.</div>
+    <div class="lista-errores" style="max-height:240px;overflow:auto;font-size:.88rem;line-height:1.5">${errores.slice(0, 300).map(esc).join('<br>')}${errores.length > 300 ? `<br>… y ${errores.length - 300} más` : ''}</div></div>`;
 }
 function estadoSyncImp(s) {
   if (!s || s.estado === 'nube') return '';
@@ -63,7 +80,7 @@ function importarClientes() {
         <p class="small muted">Descargá la planilla, completala y volvé a subirla. La columna <b>Plan</b> tiene una lista desplegable con los planes que cargaste en OMEGA, con sus precios.</p>
         <button id="plantilla">Descargar planilla modelo</button></div>
       <div class="card" style="margin:0"><h4 style="margin-top:0">Opción 2 · Otro archivo de tu PC</h4>
-        <p class="small muted">Sirve cualquier Excel o CSV con tus alumnos. <b>Solo el nombre y apellido es obligatorio</b>; el resto (plan, fechas, celular, Instagram) es opcional.</p></div></div>
+        <p class="small muted">Sirve cualquier Excel o CSV con tus alumnos. <b>Solo el nombre y apellido es obligatorio</b>; el resto (plan, fechas, celular, Instagram) es opcional. Las fechas van como <b>DD/MM/AAAA</b> y el celular solo con números. Antes de importar se revisa todo el archivo y se te avisa en qué fila está cada error.</p></div></div>
     <div class="field" style="margin-top:12px"><label>Archivo a importar (Excel o CSV)</label><input type="file" id="arch" accept=".xlsx,.xls,.csv"></div>
     <p class="small muted">Se crea la ficha y el acceso a la app web de cada alumno. Podés importar otro archivo más tarde con los datos que faltaban: <b>no se duplica nadie</b>, se completan los que ya existen y se agregan los nuevos.</p>
     <div id="imp-res"></div>`, { wide: true });
@@ -76,22 +93,33 @@ function importarClientes() {
   };
   $('#arch', m).onchange = async (e) => {
     const f = e.target.files[0]; if (!f) return;
-    const res = $('#imp-res', m); res.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+    const res = $('#imp-res', m); res.innerHTML = '<div class="empty"><span class="spinner"></span> Revisando el archivo…</div>';
     try {
       const wb = XLSX.read(await f.arrayBuffer(), { type: 'array', cellDates: true });
       const filas = leerFilasClientes(wb);
-      if (!filas.length) { res.innerHTML = '<div class="warnbox">No encontré filas con nombre. Revisá que la primera fila tenga los títulos de columna (por ejemplo “Nombre y Apellido”).</div>'; return; }
-      res.innerHTML = `<div class="infobox">Se leyeron <b>${filas.length}</b> filas de “${esc(f.name)}”.</div><div class="row" style="margin-top:10px"><button class="primary" id="go">Importar ${filas.length} alumnos</button></div>`;
+      if (!filas.length) { res.innerHTML = '<div class="warnbox">No encontré filas con datos. Revisá que la primera fila tenga los títulos de columna (por ejemplo “Nombre y Apellido”).</div>'; return; }
+      const v = await api('POST', '/clientes/importar/validar', { filas });
+      if (v.errores.length) {
+        res.innerHTML = `<div class="infobox">Se leyeron <b>${filas.length}</b> filas de “${esc(f.name)}”.</div>${cajaErroresImport(v.errores)}`;
+        toast('El archivo tiene ' + v.errores.length + ' error(es): corregilos antes de importar', 'warn');
+        return;
+      }
+      res.innerHTML = `<div class="okbox">✔ Archivo correcto: <b>${filas.length}</b> filas de “${esc(f.name)}”, sin errores de formato.</div>
+        ${v.duplicadas.length ? `<div class="infobox" style="margin-top:8px">${v.duplicadas.length === 1 ? 'Hay <b>1</b> fila repetida' : 'Hay <b>' + v.duplicadas.length + '</b> filas repetidas'} dentro del archivo: se cargará una sola vez cada persona.</div>` : ''}
+        <div class="row" style="margin-top:10px"><button class="primary" id="go">Importar ${v.validas} alumnos</button></div>`;
       $('#go', res).onclick = async (ev) => {
         ev.target.disabled = true;
         try {
           const r = await api('POST', '/clientes/importar', { filas });
+          if (r.rechazado) { res.innerHTML = cajaErroresImport(r.errores); return; }
           res.innerHTML = `<div class="okbox">Listo: <b>${r.creados}</b> nuevos · <b>${r.actualizados}</b> actualizados · <b>${r.sin_cambios || 0}</b> sin cambios · <b>${r.errores.length}</b> con error.</div>
+            ${r.duplicadas && r.duplicadas.length ? `<div class="warnbox" style="margin-top:8px" role="alert"><b>Filas repetidas en el archivo (${r.duplicadas.length}):</b> se cargó una sola vez cada persona.<div class="small" style="margin-top:4px">${r.duplicadas.slice(0, 20).map(d => 'Fila ' + d.fila + ' (' + esc(d.nombre) + ') repite la fila ' + d.de).join('<br>')}${r.duplicadas.length > 20 ? '<br>…' : ''}</div></div>` : ''}
             ${r.avisos && r.avisos.length ? `<div class="infobox" style="margin-top:8px">${r.avisos.slice(0, 15).map(esc).join('<br>')}</div>` : ''}
             ${r.errores.length ? `<div class="warnbox" style="margin-top:8px">${r.errores.slice(0, 15).map(esc).join('<br>')}</div>` : ''}
             ${r.accesos.length ? `<p class="small muted" style="margin-top:10px">A cada alumno nuevo se le creó un acceso a la app (usuario y contraseña inicial). Descargá la lista para repartirla.</p>
             <button id="dl-acc">Descargar accesos (Excel)</button>` : ''}
             ${estadoSyncImp(r.sync)}`;
+          if (r.duplicadas && r.duplicadas.length) toast('Había ' + r.duplicadas.length + ' filas repetidas: se cargó una sola de cada una', 'warn');
           const b = $('#dl-acc', res); if (b) b.onclick = () => descargarXlsx('omega-accesos-alumnos.xlsx', { Accesos: r.accesos.map(a => ({ 'Nombre y Apellido': a.nombre, Usuario: a.usuario, Contraseña: a.clave })) });
           toast('Importación terminada');
         } catch (er) { fail(er); ev.target.disabled = false; }
@@ -122,18 +150,20 @@ async function formAlta(cont, c) {
         <input type="file" id="foto" accept="image/*"></div>
       <div class="grow fgrid" style="min-width:240px">
         ${campo('a) Nombre y apellido *', `<input name="nombre" required value="${esc(c ? c.nombre : pre ? pre.nombre : '')}" autocomplete="off">`)}
-        ${campo('c) Fecha de alta', `<input type="date" name="fecha_alta" value="${esc(c ? c.fecha_alta : hoyAR())}">`)}
+        ${campo('c) Fecha de alta (DD/MM/AAAA)', campoFecha('fecha_alta', c ? c.fecha_alta : hoyAR(), { label: 'Fecha de alta' }))}
         ${esAdmin && planes.length ? campo('Plan', `<select name="plan_id"><option value="">Sin plan fijo</option>${planes.map(p => `<option value="${p.id}" data-pe="${p.precio_efectivo}" data-pm="${p.precio_mp}" ${c && c.plan_id === p.id ? 'selected' : ''}>${esc(p.nombre)} · ${money(p.precio_efectivo)} efectivo / ${money(p.precio_mp)} MP</option>`).join('')}</select>`) : ''}
         ${esAdmin ? campo('d) Precio del plan ($)', `<input type="number" name="precio_plan" min="0" step="1" value="${c ? c.precio_plan ?? 0 : ''}" inputmode="numeric">`) : ''}
         ${esAdmin && nuevo ? campo('Pago del alta (opcional)', `<select name="metodo_pago"><option value="">Todavía no pagó</option><option value="efectivo">Efectivo (entra a la caja)</option><option value="mercadopago">Mercado Pago</option></select>`) : ''}
-        ${campo('e) Fecha de baja', `<input type="date" name="fecha_baja" value="${esc(c ? c.fecha_baja : '')}">
-          <div class="small muted" style="margin-top:4px">Si la dejás vacía se completa sola (alta + 1 mes) y se corre un mes con cada renovación.</div>`)}
+        ${campo('e) Fecha de baja (DD/MM/AAAA)', `${campoFecha('fecha_baja', c ? c.fecha_baja : '', { label: 'Fecha de baja' })}
+          <div class="small muted" style="margin-top:4px">Si la dejás vacía se completa con la fecha de alta: el cliente queda vencido al día siguiente hasta que registres su pago (cada renovación corre la baja).</div>`)}
         ${campo('f) Celular o contacto', `<input name="celular" inputmode="tel" value="${esc(c ? c.celular : pre ? pre.celular : '')}" autocomplete="off">`)}
         ${campo('g) Instagram', `<input name="instagram" placeholder="usuario" value="${esc(c ? c.instagram : pre ? pre.instagram : '')}" autocapitalize="none">`)}
+        ${esAdmin ? campo('h) Alias WhatsApp', `<input name="alias_wa" maxlength="200" placeholder="Cómo lo tenés agendado en WhatsApp" value="${esc(c ? c.alias_wa || '' : '')}" autocomplete="off"><div class="small muted" style="margin-top:4px">Hark Pro lo usa para reconocer la conversación de este alumno. Podés cargar varios separados por coma.</div>`) : ''}
       </div></div>
     ${nuevo ? '<div class="small muted">Al dar de alta al alumno se le crea automáticamente su usuario y contraseña para entrar a la app.</div>' : ''}
     <div class="small muted">Los campos b) foto, f) celular y g) Instagram son opcionales.</div>
     <div class="row sticky-act"><button class="primary" type="submit">${nuevo ? 'Crear alumno' : 'Guardar cambios'}</button>${nuevo ? '' : ''}</div></form>`;
+  enlazarFechas(cont);
   const sp = $('[name=plan_id]', cont), pp = $('[name=precio_plan]', cont), mp = $('[name=metodo_pago]', cont);
   const precioSegunMedio = () => { const o = sp && sp.selectedOptions[0]; if (!o || !o.dataset.pe || !pp) return; pp.value = (mp && mp.value === 'mercadopago') ? o.dataset.pm : o.dataset.pe; };
   if (sp) sp.onchange = precioSegunMedio; if (mp) mp.onchange = precioSegunMedio;
@@ -145,6 +175,7 @@ async function formAlta(cont, c) {
     e.preventDefault();
     const fd = Object.fromEntries(new FormData(e.target));
     const body = { nombre: fd.nombre, fecha_alta: fd.fecha_alta, fecha_baja: fd.fecha_baja || null, celular: fd.celular, instagram: fd.instagram };
+    if (fd.alias_wa !== undefined) body.alias_wa = fd.alias_wa;
     if (esAdmin) { body.precio_plan = fd.precio_plan === '' ? 0 : fd.precio_plan; if (fd.plan_id !== undefined) body.plan_id = fd.plan_id || null; if (nuevo && fd.metodo_pago) { body.metodo_pago = fd.metodo_pago; body.monto = body.precio_plan; } }
     if (foto !== undefined) body.foto = foto;
     const btn = $('button[type=submit]', cont); btn.disabled = true;
@@ -240,13 +271,23 @@ vista('/clientes/:id', ['admin', 'profesor'], async (main, { id }) => {
         ${edita ? `<div class="row" style="margin-bottom:8px;flex-wrap:wrap"><span class="small muted">Semana del ${fmtF(sa.semana)}:</span>${Array.from({ length: 10 }, (_, i) => `<button class="sm ${sa.progreso === i + 1 ? 'primary' : ''}" data-pr="${i + 1}">${i + 1}</button>`).join('')}</div>` : ''}
         ${d.semanas.length ? `<div class="tablewrap"><table><thead><tr><th>Semana</th><th class="num">Se siente (alumno)</th><th class="num">Progreso (profesor)</th><th>Cargó</th></tr></thead><tbody>${d.semanas.map(x => `<tr style="cursor:default"><td>${fmtF(x.semana)}</td><td class="num">${notaTxt(x.sensacion)}</td><td class="num">${notaTxt(x.progreso)}</td><td>${esc(x.profesor || '')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Todavía no hay calificaciones.</div>'}
         <p class="small muted" style="margin-top:6px">La calificación “cómo se siente” la carga el propio alumno desde su celular una vez por semana.</p></div>
-      <div class="card" style="margin-top:14px"><h3>6 · Comentarios</h3>
+      <div class="card" style="margin-top:14px"><div class="row between" style="flex-wrap:wrap;gap:8px"><h3 style="margin:0">6 · Comentarios</h3>${edita ? '<button id="com-hark" class="sm" title="Hark Pro resume lo que este alumno conversó por WhatsApp sobre el entrenamiento">⚡ Importar con Hark Pro</button>' : ''}</div>
         ${edita ? `<div class="row" style="align-items:flex-end;margin-bottom:10px;flex-wrap:wrap"><div class="grow" style="min-width:220px"><textarea id="com-t" rows="2" maxlength="1000" placeholder="Lo que conversaste con el alumno…" style="width:100%"></textarea></div><input type="date" id="com-f" value="${hoyAR()}" style="width:auto"><button class="primary" id="com-ok">Agregar comentario</button></div>` : ''}
         ${d.comentarios.length ? d.comentarios.map(x => `<div class="list-item"><div class="grow"><div class="small muted">${fmtF(x.fecha)} · ${esc(x.autor || '')}</div>${esc(x.texto)}</div>${edita ? `<button class="ghost sm" data-dc="${x.id}">Quitar</button>` : ''}</div>`).join('') : '<div class="empty">Sin comentarios.</div>'}</div>`;
     $$('[data-pr]', tab).forEach(b => b.onclick = async () => { try { await api('PUT', '/clientes/' + c.id + '/seguimiento', { progreso: Number(b.dataset.pr) }); verSeg(); } catch (e) { fail(e); } });
     const ok = $('#com-ok', tab); if (ok) ok.onclick = async () => {
       const t = $('#com-t', tab).value.trim(); if (!t) return toast('Escribí el comentario', 'warn');
       try { await api('POST', '/comentarios', { tipo: 'cliente', ref_id: c.id, texto: t, fecha: $('#com-f', tab).value }); verSeg(); } catch (e) { fail(e); }
+    };
+    const hi = $('#com-hark', tab); if (hi) hi.onclick = async () => {
+      hi.disabled = true;
+      try {
+        const r = await api('POST', '/clientes/' + c.id + '/hark-importar');
+        if (r.creados) toast('Hark Pro agregó ' + r.creados + (r.creados === 1 ? ' resumen' : ' resúmenes') + ' de WhatsApp');
+        else if (r.mensajes) toast('Hark Pro leyó ' + r.mensajes + ' mensajes pero no hablan de entrenamiento: no se agregó ningún comentario', 'warn');
+        else toast(r.activo ? 'No hay conversaciones nuevas de este alumno. Revisá su Alias WhatsApp y que el chat esté abierto en WhatsApp Web.' : 'La lectura de WhatsApp de Hark Pro está apagada (Ajustes → Hark Pro) o todavía no capturó conversaciones de este alumno.', 'warn');
+        verSeg();
+      } catch (e) { fail(e); hi.disabled = false; }
     };
     $$('[data-dc]', tab).forEach(b => b.onclick = async () => { try { await api('DELETE', '/comentarios/' + b.dataset.dc); verSeg(); } catch (e) { fail(e); } });
   }
