@@ -20,6 +20,8 @@ rm -rf "$STAGE" installer/nodos installer/electron; mkdir -p "$STAGE/app" instal
 cp server.js lanzador.js package.json "$STAGE/app/"
 cp -r src public scripts "$STAGE/app/"
 rm -f "$STAGE/app/src/demo-data.js"
+# Conexión con la nube: la clave viene de la variable de entorno al armar el instalador; nunca queda en el repositorio.
+if [ -n "${OMEGA_SYNC_CLAVE:-}" ]; then node -e "require('fs').writeFileSync(process.argv[1]+'/app/src/nube-embebida.json', JSON.stringify({url: process.env.OMEGA_NUBE_URL||'https://omega-gimnasio-24lr.onrender.com', clave: process.env.OMEGA_SYNC_CLAVE}))" "$STAGE"; echo "  (conexión con la nube incluida en el instalador)"; fi
 nodo() { # $1 = x64 | x86  -> installer/nodos/$1/omega-node.exe
   local A=$1 CACHE=/tmp/omega-node-win-$1-$NODE_VER
   if [ ! -f "$CACHE/package/bin/node.exe" ] && [ ! -f "$CACHE/package/node.exe" ]; then

@@ -4,3 +4,4 @@ installer
 test
 demo
 *.db
+src/nube-embebida.json

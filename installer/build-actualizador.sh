@@ -9,6 +9,8 @@ NOMBRE=$(node -p "require('./src/version').nombre")
 S=installer/stage
 rm -rf "$S" installer/stage-electron; mkdir -p "$S/app" installer/stage-electron
 cp server.js lanzador.js package.json "$S/app/"; cp -r src public scripts "$S/app/"; rm -f "$S/app/src/demo-data.js"
+# Conexión con la nube: la clave viene de la variable de entorno al armar el instalador; nunca queda en el repositorio.
+if [ -n "${OMEGA_SYNC_CLAVE:-}" ]; then node -e "require('fs').writeFileSync(process.argv[1]+'/app/src/nube-embebida.json', JSON.stringify({url: process.env.OMEGA_NUBE_URL||'https://omega-gimnasio-24lr.onrender.com', clave: process.env.OMEGA_SYNC_CLAVE}))" "$S"; echo "  (conexión con la nube incluida en el instalador)"; fi
 cp electron-app/main.js electron-app/preload.js electron-app/preload-wa.js electron-app/package.json installer/stage-electron/
 SALIDA="$ROOT/dist/OMEGA-Actualizador-Version$NUM$SUF.exe"; mkdir -p dist
 (cd installer && makensis -V2 -DVERSION_NOMBRE="$NOMBRE" -DVERSION_NUM="$NUM.0.0.0" -DSALIDA="$SALIDA" actualizador.nsi)

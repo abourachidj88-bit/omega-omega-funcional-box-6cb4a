@@ -2,6 +2,12 @@
 
 Cada modificación que se pide genera una **versión nueva** (1, 2, 3…) a partir de la anterior. Las versiones anteriores quedan guardadas intactas en `OMEGA-versiones/Version-N/` (código fuente, instalador y versión de prueba). Los datos del gimnasio (`C:\OMEGA\datos`) se conservan al pasar de una versión a otra; antes de usar una versión nueva por primera vez OMEGA hace una copia de seguridad automática.
 
+## Versión 11 · revisión 2 — 06/11/2026
+- Instalación sin pasos de conexión: el instalador (base y actualizador) trae la dirección y la clave de la nube de OMEGA, así que al instalar o actualizar la PC se sincroniza sola; solo se configura el gimnasio con la clave de administrador. La clave se inyecta al armar el instalador (variable `OMEGA_SYNC_CLAVE`) y NO está en el código ni en GitHub.
+
+## Versión 11 · revisión 1 — 06/11/2026
+- La PC del gimnasio usa sola la nube oficial `https://omega-gimnasio-24lr.onrender.com`: si falta la dirección (y hay clave) o quedó la del servicio viejo (…86418), se reemplaza. La clave NO va en el código: se carga una vez en Sincronizar.
+
 ## Versión 11 — 06/11/2026
 - **Hark Pro pasa a Ajustes**, con su propia pestaña. El aprendizaje de la planificación viene **activado por defecto** (primer período de 28 días, que el administrador puede cambiar o apagar). La lectura de WhatsApp se activa aparte, con confirmación de consentimiento.
 - **Clientes → campo “Alias WhatsApp”** (varios alias separados por coma o punto y coma): Hark Pro lo compara con el nombre del chat para saber de qué alumno es la conversación, aunque WhatsApp no muestre el número.
