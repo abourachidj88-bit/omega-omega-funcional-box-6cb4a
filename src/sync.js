@@ -195,12 +195,20 @@ const NUBES_VIEJAS = ['omega-omega-funcional-box-86418'];
 const PUNTERO = process.env.OMEGA_PUNTERO || 'https://raw.githubusercontent.com/abourachidj88-bit/omega-omega-funcional-box-6cb4a/main/nube.json';
 const URL_VALIDA = process.env.OMEGA_PUNTERO ? /^https?:\/\/[^\s]+$/i : /^https:\/\/[a-z0-9][a-z0-9-]*\.onrender\.com$/i; // con OMEGA_PUNTERO (solo pruebas) se admiten direcciones locales
 let enCurso = null;
+function leerEmbebida() {
+  const cand = [];
+  try { if (process.env.OMEGA_LANZADOR_JS) cand.push(require('node:path').join(require('node:path').dirname(process.env.OMEGA_LANZADOR_JS), 'src', 'nube-embebida.json')); } catch (_) {}
+  cand.push(require('node:path').join(__dirname, 'nube-embebida.json'));
+  for (const f of cand) { try { return JSON.parse(require('node:fs').readFileSync(f, 'utf8')); } catch (_) {} }
+  return null;
+}
 function configuracion() {
   const env = (typeof process !== 'undefined' && process.env) || {};
   let url = env.NUBE_URL || '', clave = env.NUBE_CLAVE || '';
   if (!url || !clave) { try { const { getConfig } = require('./db'); url = url || getConfig('sync_url', ''); clave = clave || getConfig('sync_clave', ''); } catch (_) {} } // conexión cargada desde el botón Sincronizar
   // Conexión incluida al armar el instalador (tiene prioridad sobre nube.txt, que puede traer una conexión vieja; el archivo NO está en GitHub ni en la nube; lo genera installer/build*.sh desde la variable OMEGA_SYNC_CLAVE).
-  { try { const e = require('./nube-embebida.json'); if (e && e.clave) { clave = e.clave; if (e.url) url = e.url; } } catch (_) {} }
+  // Se busca en la carpeta del programa INSTALADO (la que usa el lanzador) y no en la versión descargada de la web, que no lleva ese archivo.
+  { const e = leerEmbebida(); if (e && e.clave) { clave = e.clave; if (e.url) url = e.url; } }
   url = String(url).replace(/\/+$/, '');
   // Dirección oficial de la nube de OMEGA (no es un secreto: la clave sí, y esa nunca va en el código).
   // Si hay clave pero no dirección, o quedó la de un servicio viejo dado de baja, se usa la oficial.

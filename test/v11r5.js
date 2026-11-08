@@ -45,6 +45,11 @@ const ACT = "const a=require('./src/actualizar');a.buscar().then(r=>console.log(
     puntero = null; x = await pc(datos, env, SYNC); assert.equal(x.r.ok, true, JSON.stringify(x)); assert.equal(x.url, B); paso('recuerda la dirección nueva y no vuelve a depender del puntero');
     // 5) la búsqueda de actualizaciones también usa la dirección nueva
     x = await pc(datos, env, ACT); assert.equal(x.error, null, JSON.stringify(x)); paso('buscar actualización también funciona con la nube nueva');
+    // 5b) la conexión incluida en el instalador sigue valiendo cuando el programa corre desde una versión descargada (sin ese archivo)
+    const inst = fs.mkdtempSync(path.join(os.tmpdir(), 'omega-r5inst-')); fs.mkdirSync(path.join(inst, 'src'));
+    fs.writeFileSync(path.join(inst, 'src', 'nube-embebida.json'), JSON.stringify({ url: B, clave: CLAVE })); fs.writeFileSync(path.join(inst, 'lanzador.js'), '');
+    x = await pc(fs.mkdtempSync(path.join(os.tmpdir(), 'omega-r5e-')), { NUBE_URL: A, NUBE_CLAVE: 'clave-vieja-de-nube-txt-000', OMEGA_LANZADOR_JS: path.join(inst, 'lanzador.js') }, "const s=require('./src/sync');console.log(JSON.stringify(s.configuracion()))");
+    assert.equal(x.url, B); assert.equal(x.clave, CLAVE); paso('ejecutando una versión descargada, la conexión del instalador pisa a un nube.txt viejo (dirección y clave)');
     // 6) una PC sin clave ni nube no hace nada raro
     x = await pc(fs.mkdtempSync(path.join(os.tmpdir(), 'omega-r5v-')), { NUBE_URL: '', NUBE_CLAVE: '', OMEGA_PUNTERO: env.OMEGA_PUNTERO }, SYNC); assert.equal(x.r.ok, false); paso('sin conexión configurada no intenta ninguna dirección');
     console.log('\n' + ok + ' pruebas OK');
