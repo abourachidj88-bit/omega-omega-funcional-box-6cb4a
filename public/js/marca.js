@@ -240,28 +240,37 @@ async function actualizacionAviso(cont) {
   let a; try { a = await api('GET', '/actualizacion/estado'); } catch (_) { return; }
   if (!a.habilitada) return;
   const caja = document.createElement('div'); caja.className = 'card syncbar'; caja.id = 'act-caja'; cont.appendChild(caja);
+  const esperarReinicio = async () => {
+    const antes = (a.version || {}).revision, antesN = (a.version || {}).numero;
+    for (let i = 0; i < 60; i++) {
+      await new Promise(x => setTimeout(x, 1000));
+      try { const n = await fetch('/api/actualizacion/estado', { headers: { Authorization: 'Bearer ' + S.token } }); if (n.ok || n.status === 401) { const j = n.ok ? await n.json() : null; if (!j || (j.version && (j.version.revision !== antes || j.version.numero !== antesN))) { location.reload(); return; } if (i > 20) { location.reload(); return; } } } catch (_) {}
+    }
+    location.reload();
+  };
   const pintar = () => {
     const v = a.version || {};
     const ver = esc(v.nombre || '') + (v.revision ? ' (rev. ' + v.revision + ')' : '');
+    const inst = `Versión instalada: <b>${ver}</b>${a.origen ? ' · ' + esc(a.origen) : ''}`;
     caja.innerHTML = a.lista_para_aplicar
-      ? `<div class="row between"><div><b>Hay una versión nueva</b><div class="small">${esc((a.disponible && a.disponible.nombre) || 'Versión nueva')}${a.disponible && a.disponible.revision ? ' (rev. ' + a.disponible.revision + ')' : ''} ya está descargada. Estás usando ${ver}. Al actualizar, OMEGA se reinicia solo en unos segundos y no se pierde ningún dato.</div></div>
+      ? `<div class="row between"><div><b>Hay una versión nueva</b><div class="small">${esc((a.disponible && a.disponible.nombre) || 'Versión nueva')}${a.disponible && a.disponible.revision ? ' (rev. ' + a.disponible.revision + ')' : ''} ya está descargada. ${inst}. Al actualizar, OMEGA se reinicia solo en unos segundos y no se pierde ningún dato.</div></div>
         <button class="primary" id="act-ap">⬆ Actualizar ahora</button></div>`
-      : `<div class="row between"><div class="small muted">Aplicación: ${ver} · ${a.error ? '<span class="t-amarillo">' + esc(a.error) + '</span>' : 'actualizada ✓'}</div><button class="sm" id="act-bu">Buscar actualización</button></div>`;
+      : `<div class="row between"><div class="small muted">${inst} · ${a.error ? '<span class="t-amarillo">' + esc(a.error) + '</span>' : 'actualizada ✓'}</div><button class="sm" id="act-bu">Buscar actualización</button></div>`;
     const ap = $('#act-ap', caja), bu = $('#act-bu', caja);
-    if (bu) bu.onclick = async () => { bu.disabled = true; bu.innerHTML = '<span class="spinner"></span> Buscando…'; try { a = await api('POST', '/actualizacion/buscar', {}); } catch (er) { fail(er); } pintar(); };
-    if (ap) ap.onclick = async () => {
-      ap.disabled = true; ap.innerHTML = '<span class="spinner"></span> Reiniciando…';
+    // un solo paso: busca en la web la última versión; si hay una nueva la descarga y reinicia OMEGA; si no, avisa que ya está al día
+    const actualizar = async (btn, texto) => {
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> ' + texto;
       try {
-        const r = await api('POST', '/actualizacion/aplicar', {});
-        if (!r.ok) { toast(r.mensaje || 'No se pudo actualizar', 'warn'); pintar(); return; }
-        const antes = (a.version || {}).revision;
-        for (let i = 0; i < 60; i++) {
-          await new Promise(x => setTimeout(x, 1000));
-          try { const n = await fetch('/api/actualizacion/estado', { headers: { Authorization: 'Bearer ' + S.token } }); if (n.ok || n.status === 401) { const j = n.ok ? await n.json() : null; if (!j || (j.version && (j.version.revision !== antes || j.version.numero !== (a.version || {}).numero))) { location.reload(); return; } if (i > 20) { location.reload(); return; } } } catch (_) {}
-        }
-        location.reload();
-      } catch (er) { fail(er); pintar(); }
+        const r = await api('POST', '/actualizacion/ahora', {});
+        if (r.estado === 'aplicando') { toast(r.mensaje, 'ok'); btn.innerHTML = '<span class="spinner"></span> Reiniciando…'; await esperarReinicio(); return; }
+        a = r;
+        if (r.estado === 'al_dia') toast(r.mensaje, 'ok');
+        else toast(r.mensaje || 'No se pudo actualizar', r.estado === 'descargada' ? 'warn' : 'err');
+      } catch (er) { fail(er); }
+      pintar();
     };
+    if (bu) bu.onclick = () => actualizar(bu, 'Buscando…');
+    if (ap) ap.onclick = () => actualizar(ap, 'Actualizando…');
   };
   pintar();
 }

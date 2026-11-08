@@ -30,6 +30,7 @@ function registrarV5(ctx) {
   });
   route('GET', '/api/actualizacion/estado', STAFF, () => { if (process.env.OMEGA_DEMO || globalThis.OMEGA_DEMO) return { habilitada: false }; return act.estadoActual(); });
   route('POST', '/api/actualizacion/buscar', ADM, async () => act.buscar());
+  route('POST', '/api/actualizacion/ahora', ADM, async () => act.actualizarAhora());
   route('POST', '/api/actualizacion/aplicar', ADM, () => act.aplicar());
 }
 module.exports = { registrar, registrarV5 };

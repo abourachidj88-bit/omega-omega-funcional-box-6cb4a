@@ -2,6 +2,11 @@
 
 Cada modificación que se pide genera una **versión nueva** (1, 2, 3…) a partir de la anterior. Las versiones anteriores quedan guardadas intactas en `OMEGA-versiones/Version-N/` (código fuente, instalador y versión de prueba). Los datos del gimnasio (`C:\OMEGA\datos`) se conservan al pasar de una versión a otra; antes de usar una versión nueva por primera vez OMEGA hace una copia de seguridad automática.
 
+## Versión 11 · revisión 4 — 07/11/2026
+- Se elimina el archivo Actualizador: las PC se actualizan solas desde la aplicación web (Render). El botón **Buscar actualización** compara la versión instalada con la última publicada en la web; si hay una nueva la descarga y reinicia OMEGA en un paso, y si ya está al día muestra el cartel "Ya tenés la versión más actualizada".
+- Se muestra la versión instalada y de dónde viene (instalador o descargada de la web).
+- Solo queda el Instalador Base (PC nueva). Lo que cambia en el programa de escritorio (ventana de Electron / lectura de WhatsApp) sigue necesitando el Instalador Base.
+
 ## Versión 11 · revisión 3 — 06/11/2026
 - Corrección: la conexión incluida en el instalador tiene prioridad sobre un `nube.txt` viejo (que apuntaba al servicio anterior con otra clave y hacía que la nube rechazara la sincronización).
 

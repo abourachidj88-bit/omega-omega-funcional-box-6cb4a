@@ -48,10 +48,13 @@ async function hasta(f, ms = 25000) { const t = Date.now(); while (Date.now() - 
     pc(home, PP, nubeBase); await esperar(pcBase);
     let r = await api(pcBase, 'POST', '/api/setup', { username: 'dueno', password: 'Omega#2026', nombre: 'Dueño' }); const adm = r.data.token;
     r = await api(pcBase, 'POST', '/api/actualizacion/buscar', {}, adm); assert.equal(r.status, 200); assert.equal(r.data.disponible, null, JSON.stringify(r.data)); assert.equal(r.data.error, null, JSON.stringify(r.data)); paso('con la misma versión en la web, no hay actualización');
+    r = await api(pcBase, 'POST', '/api/actualizacion/ahora', {}, adm); assert.equal(r.data.estado, 'al_dia', JSON.stringify(r.data)); assert.match(r.data.mensaje, /Ya tenés la versión más actualizada/); paso('con la última versión instalada, el botón dice "Ya tenés la versión más actualizada" y no actualiza nada');
+    r = await api(pcBase, 'GET', '/api/actualizacion/estado', undefined, adm); assert.equal(r.data.version.numero, 11); assert.equal(r.data.origen, 'instalador'); paso('registra la versión instalada y su origen');
+    r = await api(pcBase, 'POST', '/api/actualizacion/ahora', {}, undefined); assert.equal(r.status, 401); paso('solo el administrador puede actualizar');
     r = await api(nubeBase, 'POST', '/api/actualizacion', { accion: 'info' }); assert.equal(r.status, 401); paso('la web no entrega su código sin la clave de conexión');
     hijos[0].kill();
     // 2) la nube publica una revisión más nueva
-    const nuevaDir = copiaApp(99); const PN2 = rnd() + 2000; nube(nuevaDir, PN2); await esperar('http://127.0.0.1:' + PN2);
+    const nuevaDir = copiaApp(99); const PN2 = rnd() + 2000; const nube2 = nube(nuevaDir, PN2); await esperar('http://127.0.0.1:' + PN2);
     fs.writeFileSync(path.join(home, 'nube.txt'), 'NUBE_URL=http://127.0.0.1:' + PN2 + '\nNUBE_CLAVE=clave-de-prueba-123456\n');
     // el servidor lee nube.txt al iniciar: reiniciamos la PC con el lanzador
     execFileSync(process.execPath, [path.join(ROOT, 'lanzador.js'), '--detener'], { env: { ...process.env, OMEGA_HOME: home }, stdio: 'ignore' }); await pausa(1200);
@@ -60,9 +63,14 @@ async function hasta(f, ms = 25000) { const t = Date.now(); while (Date.now() - 
     r = await api(pcBase, 'POST', '/api/actualizacion/buscar', {}, adm2); assert.equal(r.data.error, null, JSON.stringify(r.data)); assert.equal(r.data.lista_para_aplicar, true, JSON.stringify(r.data)); assert.equal(r.data.disponible.revision, 99); paso('la PC detecta y descarga la versión nueva de la web');
     assert.ok(fs.existsSync(path.join(home, 'actualizacion', 'actual.json'))); paso('queda lista en C:\\OMEGA\\actualizacion');
     r = await api(pcBase, 'GET', '/api/actualizacion/estado', undefined, adm2); assert.equal(r.status, 200);
-    r = await api(pcBase, 'POST', '/api/actualizacion/aplicar', {}, adm2); assert.equal(r.data.ok, true, JSON.stringify(r.data));
+    r = await api(pcBase, 'POST', '/api/actualizacion/ahora', {}, adm2); assert.equal(r.data.estado, 'aplicando', JSON.stringify(r.data)); paso('el botón, con una versión nueva en la web, descarga y reinicia en un solo paso');
     const e = await hasta(async () => { const x = await api(pcBase, 'GET', '/api/actualizacion/estado', undefined, adm2); return x.status === 200 && x.data.version.revision === 99 ? x.data : null; }, 30000);
     assert.equal(e.en_uso, true); paso('el servidor se reinició solo con la versión nueva (revisión 99)');
+    assert.equal(e.origen, 'descargada de la web'); paso('la versión instalada pasa a figurar como la descargada de la web');
+    r = await api(pcBase, 'POST', '/api/login', { username: 'dueno', password: 'Omega#2026' }); const adm2b = r.data.token;
+    r = await api(pcBase, 'POST', '/api/actualizacion/ahora', {}, adm2b); assert.equal(r.data.estado, 'al_dia', JSON.stringify(r.data)); assert.equal(r.data.version.revision, 99); paso('después de actualizar, volver a tocar el botón dice que ya está al día');
+    nube2.kill(); await pausa(800);
+    r = await api(pcBase, 'POST', '/api/actualizacion/ahora', {}, adm2b); assert.equal(r.data.estado, 'error', JSON.stringify(r.data)); assert.match(r.data.mensaje, /No se pudo consultar/); paso('si la web no responde, avisa el error y no toca nada');
     r = await api(pcBase, 'POST', '/api/login', { username: 'dueno', password: 'Omega#2026' }); assert.equal(r.status, 200); paso('los datos y usuarios siguen intactos después de actualizar');
     // 3) una versión rota vuelve sola a la anterior
     execFileSync(process.execPath, [path.join(ROOT, 'lanzador.js'), '--detener'], { env: { ...process.env, OMEGA_HOME: home }, stdio: 'ignore' }); await pausa(1200);

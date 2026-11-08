@@ -115,7 +115,24 @@ function estadoActual() {
     en_uso: !!(pend && pend.dir && path.resolve(pend.dir) === path.resolve(RAIZ)),
     ultima_busqueda: estado.ultima_busqueda, error: estado.error, aplicando: estado.aplicando,
     reinicio_automatico: !!process.env.OMEGA_LANZADOR,
+    origen: pend && pend.dir && path.resolve(pend.dir) === path.resolve(RAIZ) ? 'descargada de la web' : 'instalador',
   };
+}
+
+// Botón "Buscar actualización": un solo paso. Compara con la última versión de la nube; si hay una nueva la descarga y reinicia OMEGA con ella;
+// si ya está al día lo dice. Nunca toca los datos.
+async function actualizarAhora() {
+  if (!puedeActualizar()) return { estado: 'no_disponible', mensaje: 'La actualización automática solo está en la PC del gimnasio.', ...estadoActual() };
+  const cfg = sync.configuracion();
+  if (!cfg.url || !cfg.clave) return { estado: 'error', mensaje: 'Esta PC todavía no está conectada con la aplicación web.', ...estadoActual() };
+  const e = await buscar({ descargar: true });
+  if (e.error) return { estado: 'error', mensaje: 'No se pudo consultar la última versión: ' + e.error, ...e };
+  if (e.lista_para_aplicar) {
+    const r = aplicar();
+    if (!r.ok) return { estado: 'descargada', mensaje: r.mensaje || 'La versión nueva quedó descargada; reiniciá OMEGA para usarla.', ...estadoActual() };
+    return { estado: 'aplicando', mensaje: 'Descargada ' + (e.disponible ? e.disponible.nombre + (e.disponible.revision ? ' (rev. ' + e.disponible.revision + ')' : '') : 'la versión nueva') + '. OMEGA se reinicia en unos segundos; no se pierde ningún dato.', ...estadoActual() };
+  }
+  return { estado: 'al_dia', mensaje: 'Ya tenés la versión más actualizada (' + e.version.nombre + (e.version.revision ? ', rev. ' + e.version.revision : '') + ').', ...e };
 }
 
 // Reinicia el servidor con la versión descargada (lo hace el lanzador: apaga este servidor y lo inicia de nuevo)
@@ -139,4 +156,4 @@ function iniciarProgramador() {
   timer = setInterval(() => buscar().catch(() => {}), 6 * 3600 * 1000); timer.unref();
 }
 
-module.exports = { responder, buscar, aplicar, estadoActual, iniciarProgramador, armarPaquete, hashArchivos, num };
+module.exports = { responder, buscar, aplicar, actualizarAhora, estadoActual, iniciarProgramador, armarPaquete, hashArchivos, num };

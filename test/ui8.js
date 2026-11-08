@@ -1,0 +1,40 @@
+'use strict';
+// Prueba de interfaz V11 r4: botón "Buscar actualización" (cartel "Ya tenés la versión más actualizada", descarga y reinicio, error).
+const { spawn, execFileSync } = require('node:child_process');
+const path = require('node:path');
+const fs = require('node:fs');
+const { chromium } = require('playwright');
+const ROOT = path.join(__dirname, '..');
+const DATA = process.env.E2E_DATA || '/tmp/omega-e2e11/data';
+const PORT = 3131, BASE = 'http://127.0.0.1:' + PORT;
+fs.rmSync(DATA, { recursive: true, force: true }); fs.mkdirSync(DATA, { recursive: true });
+const env = { ...process.env, DATA_DIR: DATA, PORT: String(PORT), HOST: '127.0.0.1', NODE_NO_WARNINGS: '1' };
+(async () => {
+  execFileSync('node', ['-e', "require('./src/demo-data').cargarDemo()"], { cwd: ROOT, env, stdio: 'ignore' });
+  const srv = spawn('node', ['server.js'], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  await new Promise(r => srv.stdout.on('data', d => { if (String(d).includes('escuchando')) r(); }));
+  const browser = await chromium.launch(); const problems = []; let ok = 0;
+  const chk = (c, m) => { if (!c) problems.push(m); else { ok++; console.log('  ✓ ' + m); } };
+  const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'es-AR' })).newPage();
+  page.on('pageerror', e => problems.push('pageerror: ' + e.message));
+  const v = { numero: 11, revision: 4, nombre: 'Versión 11' };
+  const base = { habilitada: true, version: v, disponible: null, lista_para_aplicar: false, en_uso: false, error: null, origen: 'instalador' };
+  let modo = 'al_dia', llamadas = 0;
+  await page.route('**/api/actualizacion/estado', r => r.fulfill({ json: base }));
+  await page.route('**/api/actualizacion/ahora', r => { llamadas++; r.fulfill({ json: modo === 'al_dia' ? { ...base, estado: 'al_dia', mensaje: 'Ya tenés la versión más actualizada (Versión 11, rev. 4).' } : modo === 'error' ? { ...base, estado: 'error', mensaje: 'No se pudo consultar la última versión: sin conexión', error: 'sin conexión' } : { ...base, estado: 'aplicando', mensaje: 'Descargada Versión 11 (rev. 5). OMEGA se reinicia en unos segundos; no se pierde ningún dato.' } }); });
+  await page.goto(BASE + '/'); await page.waitForSelector('form#f-acceso');
+  await page.fill('[name=username]', 'admin'); await page.fill('[name=password]', 'omega2026'); await page.click('form#f-acceso button');
+  await page.waitForSelector('#act-bu', { timeout: 8000 });
+  chk(/Versión instalada: Versión 11 \(rev\. 4\)/.test(await page.locator('#act-caja').innerText()), 'muestra la versión instalada y su origen');
+  await page.click('#act-bu'); await page.waitForSelector('.toast');
+  chk(/Ya tenés la versión más actualizada/.test(await page.locator('.toast').first().innerText()), 'al tocar el botón con la última versión muestra el cartel "Ya tenés la versión más actualizada"');
+  await page.waitForSelector('#act-bu'); chk(llamadas === 1, 'consultó una sola vez');
+  modo = 'error'; await page.click('#act-bu'); await page.waitForFunction(() => [...document.querySelectorAll('.toast')].some(t => /No se pudo consultar/.test(t.textContent)));
+  chk(true, 'si la web no responde muestra el error');
+  modo = 'aplicando'; await page.waitForSelector('#act-bu'); await page.click('#act-bu');
+  await page.waitForFunction(() => [...document.querySelectorAll('.toast')].some(t => /Descargada Versión 11/.test(t.textContent)));
+  chk(true, 'con una versión nueva avisa que la descargó y que OMEGA se reinicia');
+  await browser.close(); srv.kill();
+  if (problems.length) { console.error('FALLÓ:\n' + problems.join('\n')); process.exit(1); }
+  console.log('\n' + ok + ' comprobaciones OK');
+})();
