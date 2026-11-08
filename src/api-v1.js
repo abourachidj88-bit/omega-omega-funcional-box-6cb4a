@@ -345,12 +345,12 @@ function registrar(c) {
   });
 
   // --- Dirección de la app (para el QR de instalación)
-  route('GET', '/api/app-url', STAFF, () => ({
+  route('GET', '/api/app-url', STAFF, () => { sync.alinearDireccionApp(); return ({
     guardada: getConfig('url_app', '') || null,
     nube: sync.configuracion().url || null,
     lan: (globalThis.__OMEGA_IPS__ || []).map(ip => 'http://' + ip + ':' + (process.env.PORT || 3000)),
     nodo: sync.NODO,
-  }));
+  }); });
   route('PUT', '/api/app-url', ADM, async ({ req }) => {
     const b = await readBody(req);
     const u = str(b.url, 200).replace(/\/+$/, '');

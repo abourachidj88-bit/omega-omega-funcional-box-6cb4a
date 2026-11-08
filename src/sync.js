@@ -323,8 +323,26 @@ function estado() {
   let resultado = null; try { resultado = JSON.parse(getConfig('sync_resultado', 'null')); } catch (_) {}
   return { nodo: NODO, alta: !!(process.env.ALTA_URL && process.env.ALTA_CLAVE), configurado: !!(cfg.url && cfg.clave), url: cfg.url, ultimo: getConfig('sync_ultimo', null), resultado, pendientes };
 }
+// r8: el QR de los alumnos usa la dirección guardada (url_app). Si quedó una dirección vieja de Render
+// (por ejemplo la del servidor anterior), al actualizar se cambia sola por la de la nube actual.
+// Una dirección propia (dominio propio, WiFi) no se toca.
+function alinearDireccionApp() {
+  if (NODO !== 'pc') return null;
+  try {
+    const { getConfig, setConfig } = require('./db');
+    const nube = configuracion().url;
+    const guardada = getConfig('url_app', '');
+    const host = (u) => { try { return new URL(u).hostname; } catch (_) { return ''; } };
+    if (nube && guardada && /\.onrender\.com$/.test(host(guardada)) && host(guardada) !== host(nube)) {
+      setConfig('url_app', nube.replace(/\/+$/, ''));
+      return nube;
+    }
+  } catch (_) {}
+  return null;
+}
 let programado = false;
 function iniciarProgramador() {
+  alinearDireccionApp();
   if (NODO !== 'pc' || programado) return;
   const cfg = configuracion();
   if (!cfg.url || !cfg.clave) return;
@@ -334,4 +352,4 @@ function iniciarProgramador() {
   setInterval(tick, 2 * 60 * 1000).unref();
 }
 
-module.exports = { NODO, OFFSET_NUBE, instalar, leerCambios, aplicar, procesarPeticion, verificarFirma, claveDelPedido, clavesAceptadas, pruebaServidor, conRespaldo, marcarRecuperable, recuperarDireccion, sincronizar, estado, iniciarProgramador, epochLocal, configuracion };
+module.exports = { NODO, OFFSET_NUBE, instalar, leerCambios, aplicar, procesarPeticion, verificarFirma, claveDelPedido, clavesAceptadas, pruebaServidor, conRespaldo, marcarRecuperable, recuperarDireccion, sincronizar, estado, iniciarProgramador, alinearDireccionApp, epochLocal, configuracion };

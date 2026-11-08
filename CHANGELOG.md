@@ -1,5 +1,9 @@
 # OMEGA · Historial de versiones
 
+## Versión 11 · revisión 8
+- El QR de los alumnos pasa solo a la dirección de la nube actual: si la PC tenía guardada una dirección vieja de Render, al actualizar se reemplaza (una dirección propia no se toca). Así, instalar en la PC del gimnasio alcanza para que el QR apunte al servidor nuevo.
+- Instalador de producción y de pruebas: mismo código, solo cambian la dirección y la clave de la nube que traen.
+
 Cada modificación que se pide genera una **versión nueva** (1, 2, 3…) a partir de la anterior. Las versiones anteriores quedan guardadas intactas en `OMEGA-versiones/Version-N/` (código fuente, instalador y versión de prueba). Los datos del gimnasio (`C:\OMEGA\datos`) se conservan al pasar de una versión a otra; antes de usar una versión nueva por primera vez OMEGA hace una copia de seguridad automática.
 
 ## Versión 11 · revisión 7 — 08/11/2026 (en preparación, sin publicar)
