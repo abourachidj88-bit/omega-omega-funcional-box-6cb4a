@@ -2,6 +2,10 @@
 
 Cada modificación que se pide genera una **versión nueva** (1, 2, 3…) a partir de la anterior. Las versiones anteriores quedan guardadas intactas en `OMEGA-versiones/Version-N/` (código fuente, instalador y versión de prueba). Los datos del gimnasio (`C:\OMEGA\datos`) se conservan al pasar de una versión a otra; antes de usar una versión nueva por primera vez OMEGA hace una copia de seguridad automática.
 
+## Versión 11 · revisión 5 — 08/11/2026
+- Dirección de respaldo: el archivo `nube.json` de GitHub (sin claves) dice cuál es la nube vigente. Si la nube que usa la PC deja de existir (se cambió de servidor), la PC lee ese archivo, comprueba que el servidor nuevo conoce la clave de sincronización (prueba firmada) y pasa a usarlo sola, tanto para sincronizar como para buscar actualizaciones. Un puntero falso no desvía a la PC porque el servidor no conoce la clave.
+- Para mudar de servidor: crear el servicio nuevo en Render con la MISMA `SYNC_CLAVE` y cambiar la `url` de `nube.json`.
+
 ## Versión 11 · revisión 4 — 07/11/2026
 - Se elimina el archivo Actualizador: las PC se actualizan solas desde la aplicación web (Render). El botón **Buscar actualización** compara la versión instalada con la última publicada en la web; si hay una nueva la descarga y reinicia OMEGA en un paso, y si ya está al día muestra el cartel "Ya tenés la versión más actualizada".
 - Se muestra la versión instalada y de dónde viene (instalador o descargada de la web).

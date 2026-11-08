@@ -1,0 +1,4 @@
+{
+  "url": "https://omega-gimnasio-24lr.onrender.com",
+  "nota": "Dirección vigente de la nube de OMEGA. Sin claves. Si se cambia de servidor en Render: crear el servicio nuevo con la MISMA SYNC_CLAVE y cambiar la url de este archivo; las PC la encuentran solas."
+}

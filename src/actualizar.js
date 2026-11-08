@@ -58,12 +58,16 @@ function leerActual() { try { return JSON.parse(fs.readFileSync(path.join(DIR_AC
 function puedeActualizar() { return !!DIR_ACT && sync.NODO !== 'nube'; }
 
 async function pedir(cfg, accion) {
-  const ts = String(Date.now()); const cuerpo = JSON.stringify({ accion });
-  const r = await fetch(cfg.url + '/api/actualizacion', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-ts': ts, 'x-sync-firma': crypto.createHmac('sha256', cfg.clave).update(ts + '.' + cuerpo).digest('hex') }, body: cuerpo, signal: AbortSignal.timeout(accion === 'paquete' ? 120000 : 20000) });
-  if (r.status === 404) throw new Error('La aplicación web todavía no tiene la actualización automática (publicá la Versión 5 en GitHub).');
-  if (r.status === 401) throw new Error('La aplicación web rechazó la clave de conexión.');
-  if (!r.ok) throw new Error('La aplicación web respondió ' + r.status);
-  return r;
+  return sync.conRespaldo(cfg, async (c) => {
+    const ts = String(Date.now()); const cuerpo = JSON.stringify({ accion });
+    let r;
+    try { r = await fetch(c.url + '/api/actualizacion', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-ts': ts, 'x-sync-firma': crypto.createHmac('sha256', c.clave).update(ts + '.' + cuerpo).digest('hex') }, body: cuerpo, signal: AbortSignal.timeout(accion === 'paquete' ? 120000 : 20000) }); }
+    catch (e) { throw sync.marcarRecuperable(new Error('No se pudo conectar con la aplicación web: ' + (e.cause && e.cause.code || e.message)), null); }
+    if (r.status === 404) throw sync.marcarRecuperable(new Error('La aplicación web no tiene la actualización automática o ya no existe en esa dirección.'), r);
+    if (r.status === 401) throw new Error('La aplicación web rechazó la clave de conexión.');
+    if (!r.ok) throw new Error('La aplicación web respondió ' + r.status);
+    return r;
+  });
 }
 
 async function buscar({ descargar = true } = {}) {

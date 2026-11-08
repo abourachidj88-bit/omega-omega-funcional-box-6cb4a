@@ -190,6 +190,10 @@ function procesarPeticion(body) {
 // ------------------------------------------------------------ cliente (PC)
 const NUBE_OFICIAL = 'https://omega-gimnasio-24lr.onrender.com';
 const NUBES_VIEJAS = ['omega-omega-funcional-box-86418'];
+// Dirección de respaldo: un archivo (nube.json, SIN claves) en GitHub dice cuál es la nube vigente. Si la nube que usa esta PC desaparece
+// (se cambió de servidor), la PC lee ese archivo, comprueba que el servidor nuevo conoce la clave de sincronización y pasa a usarlo sola.
+const PUNTERO = process.env.OMEGA_PUNTERO || 'https://raw.githubusercontent.com/abourachidj88-bit/omega-omega-funcional-box-6cb4a/main/nube.json';
+const URL_VALIDA = process.env.OMEGA_PUNTERO ? /^https?:\/\/[^\s]+$/i : /^https:\/\/[a-z0-9][a-z0-9-]*\.onrender\.com$/i; // con OMEGA_PUNTERO (solo pruebas) se admiten direcciones locales
 let enCurso = null;
 function configuracion() {
   const env = (typeof process !== 'undefined' && process.env) || {};
@@ -201,15 +205,55 @@ function configuracion() {
   // Dirección oficial de la nube de OMEGA (no es un secreto: la clave sí, y esa nunca va en el código).
   // Si hay clave pero no dirección, o quedó la de un servicio viejo dado de baja, se usa la oficial.
   if ((!url && clave) || (url && NUBES_VIEJAS.some((h) => url.toLowerCase().includes(h)))) url = NUBE_OFICIAL;
-  return { url, clave: clave || '' };
+  const baseUrl = url;
+  // si la PC ya encontró y verificó una dirección nueva a partir de esta misma base, se usa esa
+  if (url && clave) { try { const a = JSON.parse(require('./db').getConfig('nube_url_activa', 'null')); if (a && a.desde === url && URL_VALIDA.test(a.url || '')) url = a.url; } catch (_) {} }
+  return { url, clave: clave || '', base: baseUrl };
+}
+function marcarRecuperable(e, r) { if (!r || r.status === 404 || r.status === 410) e.recuperable = true; return e; }
+// Prueba que el servidor realmente conoce la clave (si no, no se acepta: evita que un puntero falso desvíe la PC)
+async function servidorConoceLaClave(url, clave) {
+  const nonce = crypto.randomBytes(16).toString('hex'); const ts = String(Date.now()); const cuerpo = JSON.stringify({ nonce });
+  const r = await fetch(url + '/api/sync/prueba', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-ts': ts, 'x-sync-firma': firmar(clave, ts, cuerpo) }, body: cuerpo, signal: AbortSignal.timeout(60000) });
+  if (!r.ok) return false;
+  const j = await r.json();
+  return typeof j.prueba === 'string' && crypto.timingSafeEqual(Buffer.from(j.prueba.padEnd(64, '0').slice(0, 64)), Buffer.from(pruebaServidor(clave, nonce)));
+}
+const pruebaServidor = (clave, nonce) => crypto.createHmac('sha256', clave).update('servidor:' + nonce).digest('hex');
+// Lee el puntero y, si indica otra dirección que además prueba conocer la clave, la guarda. Devuelve la nueva configuración o null.
+async function recuperarDireccion(cfg) {
+  try {
+    const r = await fetch(PUNTERO, { signal: AbortSignal.timeout(15000), headers: { 'Cache-Control': 'no-cache' } });
+    if (!r.ok) return null;
+    const j = await r.json(); const nueva = String((j && j.url) || '').replace(/\/+$/, '');
+    if (!URL_VALIDA.test(nueva) || nueva === cfg.url) return null;
+    if (!(await servidorConoceLaClave(nueva, cfg.clave))) return null;
+    require('./db').setConfig('nube_url_activa', JSON.stringify({ desde: cfg.base || cfg.url, url: nueva, cuando: new Date().toISOString() }));
+    return configuracion();
+  } catch (e) { if (process.env.OMEGA_DEBUG_SYNC) console.error('puntero:', e.message); return null; }
+}
+// Ejecuta una operación contra la nube; si la nube no existe más (sin conexión al servidor, 404 o 410) prueba con la dirección de respaldo y reintenta una vez
+async function conRespaldo(cfg, operacion) {
+  { const fresca = configuracion(); if (fresca.base === cfg.base && fresca.clave === cfg.clave) cfg = fresca; } // si ya se encontró una dirección nueva, se usa directamente
+  try { return await operacion(cfg); }
+  catch (e) {
+    if (!(e && e.recuperable) || NODO === 'nube') throw e;
+    const nueva = await recuperarDireccion(cfg);
+    if (!nueva) throw e;
+    return operacion(nueva);
+  }
 }
 async function _post(cfg, cuerpoObj) {
   const cuerpo = JSON.stringify(cuerpoObj);
   const ts = String(Date.now());
-  const r = await fetch(cfg.url + '/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-ts': ts, 'x-sync-firma': firmar(cfg.clave, ts, cuerpo) }, body: cuerpo, signal: AbortSignal.timeout(60000) });
-  if (r.status === 401 || r.status === 403) throw new Error('La nube rechazó la clave de sincronización (revisá NUBE_CLAVE)');
-  if (!r.ok) throw new Error('La nube respondió ' + r.status + (r.status === 503 ? ' (puede estar despertando: reintentá en un minuto)' : ''));
-  return r.json();
+  return conRespaldo(cfg, async (c) => {
+    let r;
+    try { r = await fetch(c.url + '/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-sync-ts': ts, 'x-sync-firma': firmar(c.clave, ts, cuerpo) }, body: cuerpo, signal: AbortSignal.timeout(60000) }); }
+    catch (e) { throw marcarRecuperable(new Error('No se pudo conectar con la nube: ' + (e.cause && e.cause.code || e.message)), null); }
+    if (r.status === 401 || r.status === 403) throw new Error('La nube rechazó la clave de sincronización (revisá NUBE_CLAVE)');
+    if (!r.ok) throw marcarRecuperable(new Error('La nube respondió ' + r.status + (r.status === 503 ? ' (puede estar despertando: reintentá en un minuto)' : '')), r);
+    return r.json();
+  });
 }
 function sincronizar(motivo = 'manual') {
   if (enCurso) return enCurso;
@@ -278,4 +322,4 @@ function iniciarProgramador() {
   setInterval(tick, 2 * 60 * 1000).unref();
 }
 
-module.exports = { NODO, OFFSET_NUBE, instalar, leerCambios, aplicar, procesarPeticion, verificarFirma, sincronizar, estado, iniciarProgramador, epochLocal, configuracion };
+module.exports = { NODO, OFFSET_NUBE, instalar, leerCambios, aplicar, procesarPeticion, verificarFirma, pruebaServidor, conRespaldo, marcarRecuperable, recuperarDireccion, sincronizar, estado, iniciarProgramador, epochLocal, configuracion };

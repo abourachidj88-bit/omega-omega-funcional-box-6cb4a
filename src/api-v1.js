@@ -369,6 +369,17 @@ function registrar(c) {
     if (!sync.verificarFirma(clave, h['x-sync-ts'], h['x-sync-firma'], req.rawBody || '')) throw new HttpError(401, 'Firma inválida');
     return sync.procesarPeticion(body);
   });
+  // Prueba de identidad de la nube: demuestra que este servidor conoce la SYNC_CLAVE (la PC la pide antes de aceptar una dirección nueva)
+  route('POST', '/api/sync/prueba', PUB, async ({ req }) => {
+    if (sync.NODO !== 'nube') throw new HttpError(404, 'Ruta no encontrada');
+    const clave = process.env.SYNC_CLAVE || '';
+    if (!clave) throw new HttpError(503, 'La nube no tiene configurada la SYNC_CLAVE');
+    const body = await readBody(req, 1024 * 4);
+    const h = req.headers || {};
+    if (!sync.verificarFirma(clave, h['x-sync-ts'], h['x-sync-firma'], req.rawBody || '')) throw new HttpError(401, 'Firma inválida');
+    if (!/^[a-f0-9]{16,64}$/.test(String(body.nonce || ''))) throw new HttpError(400, 'Pedido inválido');
+    return { prueba: sync.pruebaServidor(clave, String(body.nonce)) };
+  });
   route('GET', '/api/sync/estado', STAFF, () => sync.estado());
   // Botón "Sincronizar" de un gimnasio nuevo: se cargan la dirección de su aplicación web y su clave (las entrega la herramienta de alta),
   // se prueba la conexión y recién ahí se guardan. La clave queda solo en esta PC (C:\OMEGA\nube.txt), nunca en la base de datos que se copia.
