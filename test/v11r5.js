@@ -12,8 +12,8 @@ let ok = 0; const paso = (n) => { ok++; console.log('  ✓ ' + n); };
 const hijos = []; const pausa = (ms) => new Promise(r => setTimeout(r, ms));
 const base = 7000 + Math.floor(Math.random() * 1500);
 const CLAVE = 'clave-de-prueba-123456';
-function nube(port, clave) {
-  const h = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', path.join(ROOT, 'server.js')], { env: { ...process.env, PORT: String(port), DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'omega-r5n-')), HOST: '127.0.0.1', OMEGA_NODO: 'nube', SYNC_CLAVE: clave }, stdio: 'ignore', cwd: ROOT });
+function nube(port, clave, anterior) {
+  const h = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', path.join(ROOT, 'server.js')], { env: { ...process.env, PORT: String(port), DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'omega-r5n-')), HOST: '127.0.0.1', OMEGA_NODO: 'nube', SYNC_CLAVE: clave, ...(anterior ? { SYNC_CLAVE_ANTERIOR: anterior } : {}) }, stdio: 'ignore', cwd: ROOT });
   hijos.push(h); return h;
 }
 async function esperar(url) { for (let i = 0; i < 120; i++) { try { if ((await fetch(url + '/api/estado')).ok) return; } catch (_) {} await pausa(150); } throw new Error('no arrancó ' + url); }
@@ -50,6 +50,11 @@ const ACT = "const a=require('./src/actualizar');a.buscar().then(r=>console.log(
     fs.writeFileSync(path.join(inst, 'src', 'nube-embebida.json'), JSON.stringify({ url: B, clave: CLAVE })); fs.writeFileSync(path.join(inst, 'lanzador.js'), '');
     x = await pc(fs.mkdtempSync(path.join(os.tmpdir(), 'omega-r5e-')), { NUBE_URL: A, NUBE_CLAVE: 'clave-vieja-de-nube-txt-000', OMEGA_LANZADOR_JS: path.join(inst, 'lanzador.js') }, "const s=require('./src/sync');console.log(JSON.stringify(s.configuracion()))");
     assert.equal(x.url, B); assert.equal(x.clave, CLAVE); paso('ejecutando una versión descargada, la conexión del instalador pisa a un nube.txt viejo (dirección y clave)');
+    // 5c) claves anteriores: la nube nueva acepta también la clave de las instalaciones viejas, y sigue rechazando cualquier otra
+    const D = 'http://127.0.0.1:' + (base + 3); nube(base + 3, CLAVE, 'clave-vieja-uno-111111, clave-vieja-dos-222222'); await esperar(D);
+    x = await pc(fs.mkdtempSync(path.join(os.tmpdir(), 'omega-r5o-')), { NUBE_URL: D, NUBE_CLAVE: 'clave-vieja-dos-222222', OMEGA_PUNTERO: env.OMEGA_PUNTERO }, SYNC); assert.equal(x.r.ok, true, JSON.stringify(x));
+    x = await pc(fs.mkdtempSync(path.join(os.tmpdir(), 'omega-r5o-')), { NUBE_URL: D, NUBE_CLAVE: 'clave-vieja-dos-222222', OMEGA_PUNTERO: env.OMEGA_PUNTERO, OMEGA_ACT_DIR: act }, ACT); assert.equal(x.error, null, JSON.stringify(x)); paso('la nube nueva acepta la clave anterior para sincronizar y para actualizar');
+    x = await pc(fs.mkdtempSync(path.join(os.tmpdir(), 'omega-r5o-')), { NUBE_URL: D, NUBE_CLAVE: 'clave-ajena-333333333', OMEGA_PUNTERO: env.OMEGA_PUNTERO }, SYNC); assert.equal(x.r.ok, false); paso('una clave desconocida sigue siendo rechazada');
     // 6) una PC sin clave ni nube no hace nada raro
     x = await pc(fs.mkdtempSync(path.join(os.tmpdir(), 'omega-r5v-')), { NUBE_URL: '', NUBE_CLAVE: '', OMEGA_PUNTERO: env.OMEGA_PUNTERO }, SYNC); assert.equal(x.r.ok, false); paso('sin conexión configurada no intenta ninguna dirección');
     console.log('\n' + ok + ' pruebas OK');

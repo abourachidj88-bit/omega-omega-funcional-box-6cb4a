@@ -2,6 +2,9 @@
 
 Cada modificación que se pide genera una **versión nueva** (1, 2, 3…) a partir de la anterior. Las versiones anteriores quedan guardadas intactas en `OMEGA-versiones/Version-N/` (código fuente, instalador y versión de prueba). Los datos del gimnasio (`C:\OMEGA\datos`) se conservan al pasar de una versión a otra; antes de usar una versión nueva por primera vez OMEGA hace una copia de seguridad automática.
 
+## Versión 11 · revisión 7 — 08/11/2026 (en preparación, sin publicar)
+- La nube acepta, además de `SYNC_CLAVE`, una o varias claves anteriores (`SYNC_CLAVE_ANTERIOR`, separadas por coma): las PC con instalaciones viejas pueden sincronizar y actualizarse con su clave de siempre. Hay que quitar esa variable cuando ya no queden PC viejas.
+
 ## Versión 11 · revisión 6 — 08/11/2026
 - Corrección: al correr una versión descargada de la web, la conexión incluida en el instalador (dirección y clave) no se encontraba y se volvía a leer el `nube.txt` viejo, por lo que la nube rechazaba la clave. Ahora se lee de la carpeta del programa instalado.
 

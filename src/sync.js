@@ -218,6 +218,10 @@ function configuracion() {
   if (url && clave) { try { const a = JSON.parse(require('./db').getConfig('nube_url_activa', 'null')); if (a && a.desde === url && URL_VALIDA.test(a.url || '')) url = a.url; } catch (_) {} }
   return { url, clave: clave || '', base: baseUrl };
 }
+// Claves que acepta la nube: SYNC_CLAVE (vigente) y, opcionalmente, SYNC_CLAVE_ANTERIOR (una o varias separadas por coma) para que las PC con
+// instalaciones viejas puedan seguir conectándose y actualizarse. Devuelve la clave que firmó el pedido, o null.
+function clavesAceptadas() { return [process.env.SYNC_CLAVE || '', ...String(process.env.SYNC_CLAVE_ANTERIOR || '').split(',')].map(x => x.trim()).filter(Boolean); }
+function claveDelPedido(headers, rawBody) { const h = headers || {}; return clavesAceptadas().find(k => verificarFirma(k, h['x-sync-ts'], h['x-sync-firma'], rawBody || '')) || null; }
 function marcarRecuperable(e, r) { if (!r || r.status === 404 || r.status === 410) e.recuperable = true; return e; }
 // Prueba que el servidor realmente conoce la clave (si no, no se acepta: evita que un puntero falso desvíe la PC)
 async function servidorConoceLaClave(url, clave) {
@@ -330,4 +334,4 @@ function iniciarProgramador() {
   setInterval(tick, 2 * 60 * 1000).unref();
 }
 
-module.exports = { NODO, OFFSET_NUBE, instalar, leerCambios, aplicar, procesarPeticion, verificarFirma, pruebaServidor, conRespaldo, marcarRecuperable, recuperarDireccion, sincronizar, estado, iniciarProgramador, epochLocal, configuracion };
+module.exports = { NODO, OFFSET_NUBE, instalar, leerCambios, aplicar, procesarPeticion, verificarFirma, claveDelPedido, clavesAceptadas, pruebaServidor, conRespaldo, marcarRecuperable, recuperarDireccion, sincronizar, estado, iniciarProgramador, epochLocal, configuracion };

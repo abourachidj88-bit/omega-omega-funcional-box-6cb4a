@@ -362,21 +362,19 @@ function registrar(c) {
   // --- Sincronización PC <-> nube
   route('POST', '/api/sync', PUB, async ({ req }) => {
     if (sync.NODO !== 'nube') throw new HttpError(404, 'Ruta no encontrada');
-    const clave = process.env.SYNC_CLAVE || '';
-    if (!clave) throw new HttpError(503, 'La nube no tiene configurada la SYNC_CLAVE');
+    if (!sync.clavesAceptadas().length) throw new HttpError(503, 'La nube no tiene configurada la SYNC_CLAVE');
     const body = await readBody(req, 60 * 1024 * 1024);
-    const h = req.headers || {};
-    if (!sync.verificarFirma(clave, h['x-sync-ts'], h['x-sync-firma'], req.rawBody || '')) throw new HttpError(401, 'Firma inválida');
+    const clave = sync.claveDelPedido(req.headers, req.rawBody);
+    if (!clave) throw new HttpError(401, 'Firma inválida');
     return sync.procesarPeticion(body);
   });
   // Prueba de identidad de la nube: demuestra que este servidor conoce la SYNC_CLAVE (la PC la pide antes de aceptar una dirección nueva)
   route('POST', '/api/sync/prueba', PUB, async ({ req }) => {
     if (sync.NODO !== 'nube') throw new HttpError(404, 'Ruta no encontrada');
-    const clave = process.env.SYNC_CLAVE || '';
-    if (!clave) throw new HttpError(503, 'La nube no tiene configurada la SYNC_CLAVE');
+    if (!sync.clavesAceptadas().length) throw new HttpError(503, 'La nube no tiene configurada la SYNC_CLAVE');
     const body = await readBody(req, 1024 * 4);
-    const h = req.headers || {};
-    if (!sync.verificarFirma(clave, h['x-sync-ts'], h['x-sync-firma'], req.rawBody || '')) throw new HttpError(401, 'Firma inválida');
+    const clave = sync.claveDelPedido(req.headers, req.rawBody);
+    if (!clave) throw new HttpError(401, 'Firma inválida');
     if (!/^[a-f0-9]{16,64}$/.test(String(body.nonce || ''))) throw new HttpError(400, 'Pedido inválido');
     return { prueba: sync.pruebaServidor(clave, String(body.nonce)) };
   });
