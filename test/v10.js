@@ -22,7 +22,7 @@ async function esperar() { for (let i = 0; i < 60; i++) { try { await fetch(BASE
   try {
     await esperar();
     let r = await api('POST', '/api/setup', { username: 'dueno', password: 'Omega#2026', nombre: 'Dueño' }); const admin = r.data.token;
-    r = await api('GET', '/api/estado'); assert.match(r.data.version, /Versión 11/); paso('la app informa Versión 11');
+    r = await api('GET', '/api/estado'); assert.match(r.data.version, /Versión 12/); paso("la app informa Versión 12");
 
     console.log('1) Baja vacía = fecha de alta');
     r = await api('POST', '/api/clientes', { nombre: 'Ana Prueba', fecha_alta: '2026-11-01' }, admin); assert.equal(r.status, 200, JSON.stringify(r.data));
@@ -89,10 +89,10 @@ async function esperar() { for (let i = 0; i < 60; i++) { try { await fetch(BASE
     assert.notDeepEqual(a1, a2); paso('lo que queda afuera rota de una semana a otra');
     // guardar y leer desde la API
     r = await api('GET', '/api/formatos-semana?semana=' + semanaIni, undefined, admin); const f0 = r.data.formatos[0];
-    const body = r.data.formatos.map(f => ({ id: f.id, estaciones: 5, rondas: 3, trabajo_seg: 40, descanso_seg: 20, patrones: f.patrones, capacidades: f.capacidades, energias: f.energias, frecuencias: f.id === f0.id ? { patrones: { empujar: 3, tirar: 1, basura: 9 } } : {} }));
+    const body = r.data.formatos.map(f => ({ id: f.id, estaciones: 5, rondas: 3, trabajo_seg: 40, descanso_seg: 20, patrones: f.patrones, capacidades: f.capacidades, energias: f.energias, frecuencias: f.id === f0.id ? { capacidades: { fuerza: 3, core: 1, basura: 9 }, patrones: { empujar: 3 } } : {} }));   // V12: la frecuencia por patrón se descarta
     r = await api('PUT', '/api/formatos-semana', { semana: semanaIni, formatos: body }, admin); assert.equal(r.status, 200, JSON.stringify(r.data));
     r = await api('GET', '/api/formatos-semana?semana=' + semanaIni, undefined, admin); const g0 = r.data.formatos.find(f => f.id === f0.id);
-    assert.deepEqual(g0.frecuencias, { patrones: { empujar: 3, tirar: 1 } }); paso('la API guarda las frecuencias de cada formato (y descarta claves inválidas)');
+    assert.deepEqual(g0.frecuencias, {}); paso('V12: la API ya no guarda frecuencias por estímulo (rutina estándar de 3 días)');
 
     console.log('6) Hark Pro: planificación activada por defecto, WhatsApp apagado');
     r = await api('GET', '/api/hark', undefined, admin); assert.equal(r.data.plan.estado, 'aprendiendo'); assert.equal(r.data.plan.activo, true); assert.equal(r.data.wa.activo, false); paso('V11: el aprendizaje de la planificación viene activado por defecto y WhatsApp apagado');

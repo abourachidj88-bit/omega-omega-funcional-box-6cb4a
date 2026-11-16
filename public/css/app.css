@@ -349,3 +349,13 @@ body.con-foto .auth { background: transparent; }
 .eq-card { display: flex; flex-direction: column; gap: 8px; }
 .eq-dib { display: flex; align-items: center; justify-content: center; background: var(--bg2, #14181f); border-radius: 10px; min-height: 96px; padding: 4px; }
 .eq-nom { font-size: .92rem; min-height: 2.4em; }
+
+/* V12: lista desplegable de equipamiento por formato */
+.dd-eq { position: relative; display: inline-block; min-width: 190px; }
+.dd-eq > summary { cursor: pointer; list-style: none; padding: 6px 28px 6px 10px; border: 1px solid var(--line, #3a3f4a); border-radius: 8px; background: var(--card, transparent); font-size: .85rem; position: relative; user-select: none; }
+.dd-eq > summary::-webkit-details-marker { display: none; }
+.dd-eq > summary::after { content: '▾'; position: absolute; right: 10px; top: 6px; opacity: .7; }
+.dd-eq[open] > summary { border-color: var(--brand, #c026d3); }
+.dd-eq-list { position: absolute; z-index: 30; left: 0; top: calc(100% + 4px); min-width: 250px; max-height: 280px; overflow: auto; padding: 8px 10px; border: 1px solid var(--line, #3a3f4a); border-radius: 10px; background: var(--card, #1b1e25); box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+.dd-eq-list label { display: flex; align-items: center; gap: 8px; white-space: nowrap; margin: 0 0 4px; }
+.dd-eq-list input[type=checkbox] { width: auto; flex: none; margin: 0; }

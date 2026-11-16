@@ -42,13 +42,7 @@ const hayFrec = (f, g) => f.frecuencias && f.frecuencias[g] && Object.keys(f.fre
 // Patrones (claves) de las estaciones de un formato para una fecha
 function patronesDelDia(fecha, f, avisos) {
   const N = Math.max(1, f.estaciones || 5);
-  if (hayFrec(f, 'patrones')) {
-    const perm = f.patrones && f.patrones.length ? f.patrones : [...est.CLAVES.patrones];
-    if (perm.some(c => (f.frecuencias.patrones[c] ?? 2) > 0)) {
-      const nombres = Object.fromEntries(est.PATRONES.map(p => [p.clave, p.nombre]));
-      return repartirFrecuencias(perm, f.frecuencias.patrones, N, fecha, avisos, nombres)[IDX_PLANTILLA[plantillaDe(fecha)]];
-    }
-  }
+  // V12: los patrones de movimiento siguen siempre la rutina estándar de 3 días óptimos por semana (días tipo A, B y C, cada patrón en 2 de los 3)
   let permitidos = f.patrones && f.patrones.length ? [...f.patrones] : [...est.CLAVES.patrones];
   const k = permitidos.length;
   if (2 * k > 3 * N) {
@@ -148,12 +142,14 @@ function construirCircuito(fecha, formatoId) {
     if (l === undefined || dist < l) ultimaVez.set(u.ejercicio_id, dist);
   }
 
+  const equiposF = formato.equipos || [];    // V12: equipamiento que usa el formato (vacío = todo)
+  const equipoOk = (e) => !equiposF.length || equiposF.includes(e.equipo);
   const elegidos = [];
   const slots = [];
   claves.forEach((clave, i) => {
     const zona = est.zonaDeClave(clave);
     const objCap = capDia[(i + t) % capDia.length], objEn = enDia[(i + t + 1) % enDia.length];
-    const pool = todos.filter(e => e.zona === zona && !elegidos.some(x => x.id === e.id));
+    const pool = todos.filter(e => e.zona === zona && equipoOk(e) && !elegidos.some(x => x.id === e.id));
     const dura = (e) => !minInt || (RANGO_INT[e.intensidad] || 1) >= minInt;       // clases HIIT: ejercicios que suben las pulsaciones
     const encaja = (e) => capsDe(e).some(c => capSel.includes(c)) && ensDe(e).some(c => enSel.includes(c));
     const prueba = (e) => factible(demandaDe([...elegidos, e], porEstacion), stock);
@@ -179,7 +175,8 @@ function construirCircuito(fecha, formatoId) {
         break;
       }
     }
-    if (!elegido) { advertencias.push('no hay ejercicios cargados para ' + zona); slots.push({ ejercicio_id: 0, zona, patron: clave }); return; }
+    // con equipamiento elegido no se avisa si faltan ejercicios: el profesor o el dueño los agrega cuando lo necesita
+    if (!elegido) { if (!equiposF.length) advertencias.push('no hay ejercicios cargados para ' + zona);  slots.push({ ejercicio_id: 0, zona, patron: clave }); return; }
     elegidos.push(elegido);
     slots.push({ ejercicio_id: elegido.id, zona, patron: clave });
   });
@@ -335,7 +332,9 @@ function circuitoPorId(id) {
 function sugerencias(circuitoId, slot, zona) {
   const circ = get('SELECT * FROM circuitos WHERE id = ?', circuitoId);
   if (!circ) return null;
-  const { porEstacion } = cfgFormato(semana.formatoEf(circ.formato_id, circ.fecha));
+  const fEf = semana.formatoEf(circ.formato_id, circ.fecha);
+  const { porEstacion } = cfgFormato(fEf);
+  const eqF = (fEf && fEf.equipos) || [];     // V12: solo ejercicios con el equipamiento del formato
   const stock = stockMap();
   const slots = JSON.parse(circ.slots);
   const ejMap = ejercicioMap();
@@ -353,7 +352,7 @@ function sugerencias(circuitoId, slot, zona) {
     if (p === undefined || d < p) dist.set(u.ejercicio_id, d);
   }
   return all('SELECT id, zona, nombre, prog2, prog3, equipo, unidades, descripcion, video, activo, patron, origen, intensidad, (img1 IS NOT NULL) AS img1, (img2 IS NOT NULL) AS img2, (img3 IS NOT NULL) AS img3 FROM ejercicios WHERE activo = 1 AND zona = ?', zonaBuscada)
-    .filter(e => !actuales.some(a => a.id === e.id))
+    .filter(e => !actuales.some(a => a.id === e.id) && (!eqF.length || eqF.includes(e.equipo)))
     .map(e => ({
       id: e.id, nombre: e.nombre, prog2: e.prog2, prog3: e.prog3, equipo: e.equipo, zona: e.zona, intensidad: e.intensidad || null, tiene_video: !!e.video,
       alcanza_equipo: factible(demandaDe([...otros, e], porEstacion), stock),
@@ -407,4 +406,4 @@ function faltantesEquipo(circuito, asistentes) {
   return out;
 }
 
-module.exports = { repartirFrecuencias, sincronizarSesiones, aplicarSemana, patronesDelDia, cfgFormato, modoPlanificacion, PLANTILLAS, plantillaDe, generarRango, claseDelDia, circuitoPorId, sugerencias, reemplazarSlot, faltantesEquipo, formatosSinConfigurar, cfg };
+module.exports = { repartirFrecuencias, construirCircuito, sincronizarSesiones, aplicarSemana, patronesDelDia, cfgFormato, modoPlanificacion, PLANTILLAS, plantillaDe, generarRango, claseDelDia, circuitoPorId, sugerencias, reemplazarSlot, faltantesEquipo, formatosSinConfigurar, cfg };

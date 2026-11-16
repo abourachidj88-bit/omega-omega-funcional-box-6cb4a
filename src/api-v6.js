@@ -6,7 +6,7 @@ function registrar(ctx) {
   const planner = require('./planner');
   const est = require('./estimulos');
   const { nowAR, lunesDe, esFecha } = require('./util');
-  const { all, get } = require('./db');
+  const { all, get, run } = require('./db');
 
   const lunesDeBody = (v) => lunesDe(v && esFecha(String(v)) ? String(v) : nowAR().fecha);
   const aplicar = (lunes, rehacer) => { try { return planner.aplicarSemana(lunes, rehacer); } catch (e) { return { error: e.message }; } };
@@ -68,12 +68,25 @@ function registrar(ctx) {
       if (f.patrones !== undefined) o.patrones = est.lista(f.patrones, est.CLAVES.patrones);
       if (f.capacidades !== undefined) o.capacidades = est.lista(f.capacidades, est.CLAVES.capacidades);
       if (f.energias !== undefined) o.energias = est.lista(f.energias, est.CLAVES.energias);
-      if (f.frecuencias !== undefined) o.frecuencias = semana.frecLimpia(f.frecuencias);
+      if (f.frecuencias !== undefined) o.frecuencias = semana.frecLimpia(f.frecuencias);   // (los patrones ya no llevan frecuencia: se ignoran)
       for (const k of ['patrones', 'capacidades', 'energias']) if (o[k] && !o[k].length) throw bad('Cada formato necesita al menos una opción en patrones de movimiento, capacidades físicas y sistema energético');
       return o;
     });
     semana.guardarFormatos(lunes, lista);
     return { ok: true, semana: lunes, aplicado: aplicar(lunes, true) };
+  });
+  // V12: equipamiento que usa cada formato (relación formato ↔ equipamiento; vacío = todo el equipamiento)
+  route('PUT', '/api/formatos/:id/equipos', ADM, async ({ req, params }) => {
+    const b = await readBody(req);
+    const f = get('SELECT id FROM formatos WHERE id = ? AND activo = 1', Number(params.id));
+    if (!f) throw bad('Formato inexistente');
+    if (!Array.isArray(b.equipos)) throw bad('Lista de equipamiento inválida');
+    const validas = new Set(all('SELECT clave FROM equipamiento').map(x => x.clave));
+    const equipos = [...new Set(b.equipos.map(x => String(x)))];
+    for (const c of equipos) if (!validas.has(c)) throw bad('Equipamiento inexistente: ' + c);
+    run('UPDATE formatos SET equipos = ? WHERE id = ?', equipos.length ? JSON.stringify(equipos) : null, f.id);
+    const hoy = lunesDeBody(null);
+    return { ok: true, id: f.id, equipos, aplicado: aplicar(hoy, true) };
   });
   route('POST', '/api/formatos-semana/copiar', ADM, async ({ req }) => {
     const b = await readBody(req);

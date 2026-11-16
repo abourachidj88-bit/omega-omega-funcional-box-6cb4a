@@ -133,13 +133,9 @@ const env = { ...process.env, DATA_DIR: DATA, PORT: String(PORT), HOST: '127.0.0
   await page.keyboard.press('Escape');
   await page.evaluate(() => { document.querySelectorAll('.modal-back').forEach(m => m.remove()); });
 
-  // ---- 5. Frecuencia semanal en Formatos
+  // ---- 5. (V12) los estímulos ya no llevan frecuencia propia
   await ir('/planificacion/formatos');
-  const sf = await page.locator('select[data-fq]').count();
-  chk(sf > 5, 'cada estímulo elegido tiene su frecuencia semanal (' + sf + ' selectores)');
-  await page.locator('select[data-fq]').first().selectOption('3'); await page.waitForTimeout(150);
-  chk(await page.locator('select[data-fq]').first().inputValue() === '3', 'la frecuencia se puede cambiar de 0× a 3×');
-  await shot('v10-frecuencias');
+  chk(await page.locator('select[data-fq]').count() === 0, 'V12: ningún estímulo tiene selector de frecuencia');
 
   // ---- 6. Hark Pro (ahora en Ajustes)
   await ir('/planificacion');

@@ -1,5 +1,13 @@
 # OMEGA · Historial de versiones
 
+## Versión 12
+Módulo Planificación.
+- **Equipamiento por formato:** cada formato tiene una lista desplegable (varias opciones) con el equipamiento que usa: solo peso corporal, solo bandas, solo sogas, combinaciones, etc. Sin elegir ninguno usa todo el equipamiento. Se elige en *Formatos e Intervalos* y en la columna nueva **Equipamiento** de la tabla «Lo que la IA toma de cada formato» (pantalla Equipamiento). Los circuitos se arman solo con ejercicios de ese equipamiento; si falta algún ejercicio, el lugar queda para elegir a mano (sin avisos ni usar otro equipo: el profesor o el dueño los agrega cuando lo necesita). Los reemplazos manuales también se limitan al equipamiento del formato.
+- **Botón «Ver equipamiento →»** en cada formato: lleva a la pantalla Equipamiento mostrando solo el equipamiento de ese formato (con «Ver todo el equipamiento» para volver).
+- El equipamiento nuevo aparece automáticamente en las listas de todos los formatos y se asigna a los que lo usen.
+- **Todos los estímulos con la rutina estándar de 3 días óptimos por semana** (patrones de movimiento, capacidades físicas y sistema energético, como el seguimiento del cliente): se sacaron los selectores de frecuencia 0× a 3×. Las frecuencias guardadas antes se ignoran.
+- Nueva columna `formatos.equipos` (se sincroniza con la nube como el resto de la tabla). Pruebas: test/v12.js (13) y test/ui12.js (16).
+
 ## Versión 11 · revisión 8
 - El QR de los alumnos pasa solo a la dirección de la nube actual: si la PC tenía guardada una dirección vieja de Render, al actualizar se reemplaza (una dirección propia no se toca). Así, instalar en la PC del gimnasio alcanza para que el QR apunte al servidor nuevo.
 - Instalador de producción y de pruebas: mismo código, solo cambian la dirección y la clave de la nube que traen.

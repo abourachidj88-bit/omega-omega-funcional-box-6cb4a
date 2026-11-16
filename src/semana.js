@@ -94,12 +94,20 @@ const CAMPOS_SEMANA = ['estaciones', 'trabajo_seg', 'descanso_seg', 'sin_trabajo
 function frecLimpia(v) {
   let o = v; if (typeof v === 'string') { try { o = JSON.parse(v); } catch (_) { o = null; } }
   const out = {};
+  return out;   // V12: todos los estímulos siguen la rutina estándar de 3 días; ya no hay frecuencias propias
   if (!o || typeof o !== 'object') return out;
-  for (const g of ['patrones', 'capacidades', 'energias']) {
+  for (const g of ['capacidades', 'energias']) {   // V12: los patrones de movimiento ya no llevan frecuencia propia (rutina estándar de 3 días)
     if (!o[g] || typeof o[g] !== 'object') continue;
     for (const c of est.CLAVES[g]) { const n = o[g][c]; if (n === undefined || n === null || n === '') continue; const x = Math.max(0, Math.min(3, parseInt(n, 10))); if (Number.isFinite(x)) (out[g] = out[g] || {})[c] = x; }
   }
   return out;
+}
+// V12: equipamiento del formato (claves de la tabla equipamiento). Vacío = sin restricción (todo el equipamiento, también el que se agregue después).
+function equiposDe(v) {
+  let a = v; if (typeof v === 'string') { try { a = JSON.parse(v); } catch (_) { a = null; } }
+  if (!Array.isArray(a)) return [];
+  const validas = new Set(all('SELECT clave FROM equipamiento').map(x => x.clave));
+  return [...new Set(a.map(x => String(x)).filter(x => validas.has(x)))];
 }
 function normalizar(f) {
   const d = est.defaultsFormato(f.nombre);
@@ -109,6 +117,7 @@ function normalizar(f) {
     estaciones_cfg: f.estaciones ?? null,
     estaciones: f.estaciones > 0 ? f.estaciones : generales,
     frecuencias: frecLimpia(f.frecuencias),
+    equipos: equiposDe(f.equipos),
     patrones: est.lista(f.patrones || d.patrones, est.CLAVES.patrones),
     capacidades: est.lista(f.capacidades || d.capacidades, est.CLAVES.capacidades),
     energias: est.lista(f.energias || d.energias, est.CLAVES.energias),
@@ -170,5 +179,5 @@ function resumenSemanas(desde, n) {
   return out;
 }
 
-module.exports = { frecLimpia, lunesDeFecha, origenAgenda, celdasDe, agendaDe, celda, horasDe, asegurarPropia, guardarAgenda, copiarAgenda, asignarProfesor, copiarStaff,
+module.exports = { equiposDe, frecLimpia, lunesDeFecha, origenAgenda, celdasDe, agendaDe, celda, horasDe, asegurarPropia, guardarAgenda, copiarAgenda, asignarProfesor, copiarStaff,
   origenFormatos, formatosDeSemana, formatoEf, formatosPorId, guardarFormatos, copiarFormatos, resumenSemanas, normalizar };
