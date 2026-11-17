@@ -14,7 +14,7 @@ const RAIZ = path.join(__dirname, '..');
 const HOME = process.env.OMEGA_HOME || '';
 const DIR_ACT = process.env.OMEGA_ACT_DIR || (HOME ? path.join(HOME, 'actualizacion') : '');
 const PERMITIDO = /^(server\.js|lanzador\.js|package\.json|(src|public|scripts)\/[A-Za-z0-9_.\-\/ ]+)$/;
-const EXCLUIDO = /(^|\/)(demo-data\.js|\.DS_Store|Thumbs\.db)$/;
+const EXCLUIDO = /(^|\/)(demo-data\.js|ia-embebida\.json|\.DS_Store|Thumbs\.db)$/;   // la clave de la IA nunca viaja en un paquete de actualización
 const num = (v) => (Number(v.numero) || 0) * 1000 + (Number(v.revision) || 0);
 const actual = () => ({ numero: VERSION.numero, revision: VERSION.revision || 0, nombre: VERSION.nombre });
 

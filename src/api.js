@@ -862,6 +862,7 @@ require('./api-v7').registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, r
 require('./api-v8').registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str });
 require('./api-v9').registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str });
 require('./api-v10').registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str });
+require('./api-v14').registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str });
 require('./api-v4').registrarV5({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str });
 require('./api-v3').registrar({ route, ADM, STAFF, TODOS, PUB, HttpError, bad, readBody, str, num, requireFecha, fechaOpc, soloDigitos, normTel, claseAhora, registrarAsistencia, semaforoAlta, horasDeAgenda, asegurarSesion });
 // ------------------------------------------------------------ despacho

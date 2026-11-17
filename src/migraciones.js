@@ -187,6 +187,7 @@ function aplicar(db) {
   v11(db, add);
   v12(db, add);
   v13(db, add);
+  v14(db, add);
 }
 // Versión 7: descuentos, seguimiento de alumnos y de visitas, profesor de seguimiento en las rutinas
 function v7(db, add) {
@@ -232,6 +233,15 @@ function v7(db, add) {
 }
 // Versión 9: posiciones dibujadas por el usuario (figura de palitos) para los ejercicios nuevos
 // Versión 11: alias con el que cada alumno figura en WhatsApp (Hark Pro lo usa para reconocer la conversación)
+// Versión 14: equipamiento inteligente (propuestas de la IA: dibujo y ejercicios con sus estímulos)
+function v14(db, add) {
+  add('equipamiento', 'dibujo_ia', 'TEXT');          // dibujo propuesto por la IA, pendiente de que el usuario lo use o lo descarte
+  add('equipamiento', 'ia_nota', 'TEXT');            // qué encontró la IA y qué advertencias tiene la propuesta
+  add('sugerencias', 'capacidad', 'TEXT');
+  add('sugerencias', 'energia', 'TEXT');
+  add('sugerencias', 'intensidad', 'TEXT');
+  add('sugerencias', 'ia', 'INTEGER NOT NULL DEFAULT 0');
+}
 // Versión 13: peso del equipamiento (tilde "tiene peso" + valor en kg, texto libre: "12", "4 a 20")
 function v13(db, add) {
   add('equipamiento', 'tiene_peso', 'INTEGER NOT NULL DEFAULT 0');

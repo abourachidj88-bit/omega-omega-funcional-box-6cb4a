@@ -1,5 +1,14 @@
 # OMEGA · Historial de versiones
 
+## Versión 14
+Módulo Planificación · Equipamiento inteligente.
+- **Alta inteligente:** al crear un equipamiento, el programa busca solo en segundo plano (Wikipedia, sin mostrar ningún buscador) y la IA (Gemini) interpreta qué es, propone un **dibujo** y **ejercicios** que lo usan. Con al menos 5 ejercicios por cada uno de los 13 estímulos (7 patrones, 4 capacidades, 2 sistemas energéticos); si falta alguno, la IA completa en un segundo pedido.
+- **Nombre ambiguo:** se muestran opciones para elegir, o «Dejarlo como lo describí» (queda sin dibujo ni ejercicios propuestos).
+- **Todo opcional:** el dibujo propuesto se puede usar o descartar; los ejercicios se aceptan uno a uno, todos o se «Descartan todos». Los aceptados entran a la biblioteca como «Importados por IA».
+- **Sin internet o sin clave de IA:** el alta funciona igual y no se genera nada (con aviso).
+- La clave de la IA va embebida en el instalador (ia-embebida.json), no se guarda en el código ni viaja en los paquetes de actualización.
+- Ya no se generan sugerencias por reglas al crear equipamiento. Nuevas columnas `equipamiento.dibujo_ia`, `ia_nota` y `sugerencias.ia`. Pruebas: test/v14.js (24) y test/ui14.js (5).
+
 ## Versión 13
 Módulos Planificación (Biblioteca y Equipamiento) y Ajustes.
 - **Dibujo de las 3 posiciones:** nuevo control «Tamaño de la persona» (40 % a 100 %) y botón «Ajustar al cuadro», que elige el tamaño más grande con el que entran completas las 3 posiciones. El tamaño es el mismo en las 3 posiciones, se guarda con el ejercicio (`poses[].z`) y se ve igual en las imágenes. Si la figura estaba apoyada en el piso, sigue apoyada al achicarla.

@@ -324,10 +324,44 @@ vista('/planificacion', ['admin', 'profesor'], async (main) => {
   await cargar();
 });
 
+const nombreEst = (est, g, k) => ((est && est[g] || []).find(o => o.clave === k) || {}).nombre || k;
+
+// ---------- V14: seguimiento de la IA en segundo plano ----------
+// La búsqueda corre en el servidor. Acá solo se consulta cada pocos segundos: si el nombre es ambiguo se pregunta qué es, y al terminar se avisa.
+let _iaTimer = null; const _iaVistos = new Set();
+function iaSeguir(forzar) {
+  if (_iaTimer) { if (forzar) _iaTick(); return; }
+  let vueltas = 0;
+  _iaTimer = setInterval(async () => { if (++vueltas > 100) { clearInterval(_iaTimer); _iaTimer = null; return; } await _iaTick(); }, 3500);
+  _iaTick();
+}
+async function _iaTick() {
+  let lista; try { lista = await api('GET', '/equipamiento-ia/pendientes'); } catch (_) { return; }
+  for (const j of lista) {
+    if (j.estado === 'elegir' && !_iaVistos.has('elegir|' + j.clave)) { _iaVistos.add('elegir|' + j.clave); preguntarEquipo(j); continue; }
+    if (['listo', 'sin_internet', 'omitido', 'no_entendido', 'error'].includes(j.estado) && !_iaVistos.has('fin|' + j.clave + '|' + j.estado)) {
+      _iaVistos.add('fin|' + j.clave + '|' + j.estado);
+      if (j.estado === 'listo') { toast('✨ La IA terminó con «' + j.nombre + '»: ' + j.mensaje + '. Revisalos y aceptá o descartá.'); if (location.hash.indexOf('/planificacion/equipos') >= 0 && typeof render === 'function') render(); }
+      else if (j.estado === 'sin_internet') toast(j.mensaje, 'warn');
+      else if (j.estado === 'no_entendido' || j.estado === 'error') toast(j.mensaje, 'warn');
+    }
+  }
+  if (!lista.some(j => ['buscando', 'pensando', 'elegir'].includes(j.estado)) && _iaTimer) { clearInterval(_iaTimer); _iaTimer = null; }
+}
+// El nombre puede ser varias cosas distintas: se muestran opciones y se puede dejar como se escribió (sin propuestas de ejercicios)
+function preguntarEquipo(j) {
+  const m = modal('¿Qué equipamiento es «' + esc(j.nombre) + '»?', `<p class="small muted">El nombre puede referirse a varios equipamientos. Elegí el correcto para que la IA proponga el dibujo y los ejercicios, o dejalo como lo escribiste (en ese caso no se proponen ejercicios).</p>
+    <div class="stack" id="ia-op">${(j.candidatos || []).map((c, i) => `<button type="button" class="list-item" data-ci="${i}" style="text-align:left;cursor:pointer;width:100%"><div class="grow"><b>${esc(c.nombre)}</b><div class="small muted">${esc(c.descripcion)}</div></div></button>`).join('')}</div>
+    <div class="row" style="justify-content:flex-end;margin-top:12px"><button type="button" id="ia-dejar">Dejarlo como lo describí</button></div>`);
+  const resolver = async (indice) => { try { await api('POST', '/equipamiento/' + encodeURIComponent(j.clave) + '/ia/elegir', { indice }); m.close(); if (indice !== null) { toast('La IA está armando la propuesta para «' + j.nombre + '»…'); iaSeguir(true); } else toast('Queda como lo escribiste, sin propuestas de ejercicios'); } catch (e) { fail(e); } };
+  $$('[data-ci]', m).forEach(b => b.onclick = () => resolver(Number(b.dataset.ci)));
+  $('#ia-dejar', m).onclick = () => resolver(null);
+}
+
 // ---------- Equipamiento (V10: cada equipo con su dibujo; la IA usa la configuración de cada formato) ----------
 vista('/planificacion/equipos', ['admin', 'profesor'], async (main) => {
-  const [eq, cfg, sug, fmts] = await Promise.all([api('GET', '/equipamiento'), api('GET', '/config-clase'), api('GET', '/sugerencias'), api('GET', '/formatos')]);
-  Ilustra.setDibujos(eq);
+  const [eq, cfg, sug, fmts, est] = await Promise.all([api('GET', '/equipamiento'), api('GET', '/config-clase'), api('GET', '/sugerencias'), api('GET', '/formatos'), estimulos()]);
+  Ilustra.setDibujos([...eq, ...eq.filter(e => e.dibujo_ia).map(e => ({ clave: '__ia_' + e.clave, dibujo: e.dibujo_ia }))]);
   const editar = puede('plan.config');
   const fSel = eqFormatoSel != null ? fmts.find(f => f.id === eqFormatoSel) : null;
   const lista = eq.filter(e => e.clave !== 'ninguno' && (!fSel || !fSel.equipos.length || fSel.equipos.includes(e.clave)));
@@ -338,9 +372,10 @@ vista('/planificacion/equipos', ['admin', 'profesor'], async (main) => {
     <div class="card" style="margin-bottom:14px"><h3>Lo que la IA toma de cada formato</h3>
       <div class="tablewrap" style="overflow:visible"><table><thead><tr><th>Formato</th><th class="num">Estaciones</th><th>Equipamiento</th><th class="num">Personas por estación</th></tr></thead><tbody>${fmts.map(f => `<tr style="cursor:default${fSel && fSel.id === f.id ? ';outline:2px solid var(--brand)' : ''}"><td>${chipFormato(f)}</td><td class="num">${f.estaciones}</td><td>${ddEquipos(f, eq, editar)}</td><td class="num">${porEst(f)}${f.cupo_estacion > 0 ? '' : ' <span class="muted small">(según capacidad estándar)</span>'}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">Sin formatos.</td></tr>'}</tbody></table></div>
       <p class="small muted" style="margin:8px 0 0">Elegí con qué equipamiento se arma cada formato (por ejemplo solo peso corporal, solo bandas o solo sogas). Si no elegís ninguno, usa todo. El equipamiento nuevo aparece en esta lista y se asigna a los formatos que lo usen.</p></div>
-    ${sug.length ? `<div class="card" style="border-color:var(--brand);margin-bottom:14px"><div class="row between"><h3 style="margin:0">💡 La IA sugiere ${sug.length} ejercicios nuevos</h3><button class="primary sm" id="s-todas">Agregar todos a la biblioteca</button></div>
-      <p class="small muted">Se armaron a partir del equipamiento nuevo. Revisalos: los que aceptes entran a la biblioteca con su progresión y se usan en las próximas planificaciones.</p>
-      ${sug.map(x => `<div class="list-item"><div class="grow"><b>${esc(x.nombre)}</b> <span class="pill">${esc(x.zona)}</span><div class="small muted">${esc(x.prog2)} → ${esc(x.prog3)}</div><div class="small">Equipo: ${esc(x.equipo_nombre || x.equipo_clave)}</div></div><button class="sm" data-ver="${x.id}">Ver</button><button class="primary sm" data-ac="${x.id}">Agregar</button><button class="ghost sm" data-de="${x.id}">Descartar</button></div>`).join('')}</div>` : ''}
+    ${eq.filter(e => e.dibujo_ia).map(e => `<div class="card" style="border-color:var(--brand);margin-bottom:14px"><div class="row" style="gap:14px;align-items:center;flex-wrap:wrap"><div style="min-width:132px">${Ilustra.miniEquipo('__ia_' + e.clave, 132, 88)}</div><div class="grow" style="min-width:220px"><h3 style="margin:0 0 4px">✨ La IA propone un dibujo para «${esc(e.nombre)}»</h3><div class="small muted">${esc(e.ia_nota || 'Revisalo: podés usarlo tal cual, usarlo y retocarlo, o descartarlo y dibujarlo vos.')}</div></div><div class="row" style="gap:6px"><button class="primary sm" data-iau="${esc(e.clave)}">Usar este dibujo</button><button class="ghost sm" data-iad="${esc(e.clave)}">Descartar</button></div></div></div>`).join('')}
+    ${sug.length ? `<div class="card" style="border-color:var(--brand);margin-bottom:14px"><div class="row between" style="flex-wrap:wrap;gap:8px"><h3 style="margin:0">💡 La IA sugiere ${sug.length} ejercicios nuevos</h3><div class="row" style="gap:6px"><button class="ghost sm" id="s-nada">Descartar todos</button><button class="primary sm" id="s-todas">Agregar todos a la biblioteca</button></div></div>
+      <p class="small muted">Se armaron a partir del equipamiento nuevo. Revisalos: los que aceptes entran a la biblioteca con su progresión y se usan en las próximas planificaciones. Los que descartes no vuelven a aparecer.</p>
+      ${[...sug].sort((a, b) => String(a.zona).localeCompare(String(b.zona)) || String(a.nombre).localeCompare(String(b.nombre))).map(x => `<div class="list-item"><div class="grow"><b>${esc(x.nombre)}</b> <span class="pill">${esc(x.zona)}</span>${x.ia ? ' <span class="pill" title="Propuesto por la IA a partir de la búsqueda">✨ IA</span>' : ''}<div class="small muted">${esc(x.prog2)} → ${esc(x.prog3)}</div>${x.ia && (x.capacidad || x.energia) ? `<div class="small muted">${esc(String(x.capacidad || '').split(',').filter(Boolean).map(k => nombreEst(est, 'capacidades', k)).join(', '))} · ${esc(String(x.energia || '').split(',').filter(Boolean).map(k => nombreEst(est, 'energias', k)).join(', '))}</div>` : ''}<div class="small">Equipo: ${esc(x.equipo_nombre || x.equipo_clave)}</div></div><button class="sm" data-ver="${x.id}">Ver</button><button class="primary sm" data-ac="${x.id}">Agregar</button><button class="ghost sm" data-de="${x.id}">Descartar</button></div>`).join('')}</div>` : ''}
     <div class="eq-grid">${lista.map(e => `<div class="card eq-card" data-k="${esc(e.clave)}"><div class="eq-dib" title="${editar ? 'Tocá para editar el dibujo' : ''}" ${editar ? `data-dib="${esc(e.clave)}"` : ''} style="cursor:${editar ? 'pointer' : 'default'}">${Ilustra.miniEquipo(e.clave, 132, 88)}</div>
       <div class="eq-nom"><b>${esc(e.nombre)}</b></div>
       <div class="row" style="gap:6px;align-items:center;flex-wrap:nowrap"><label class="small muted" style="margin:0">Cantidad</label><input type="number" min="0" data-c="${esc(e.clave)}" value="${e.cantidad}" style="width:84px"></div>
@@ -376,12 +411,16 @@ vista('/planificacion/equipos', ['admin', 'profesor'], async (main) => {
       if (d) { dibujo = d; Ilustra.setDibujos([...eq, { clave: '__nuevo', dibujo: d }]); $('#mini-nuevo', m).innerHTML = Ilustra.miniEquipo('__nuevo', 132, 88); }
     };
     $('#n-tp', m).onchange = (ev) => { const i = $('#n-pk', m); i.style.display = ev.target.checked ? '' : 'none'; if (ev.target.checked) i.focus(); };
-    $('#f', m).onsubmit = async (e) => { e.preventDefault(); try { const r = await api('POST', '/equipamiento', { ...Object.fromEntries(new FormData(e.target)), tiene_peso: $('#n-tp', m).checked, dibujo }); m.close(); toast('Equipamiento agregado · ' + r.sugerencias + ' ejercicios sugeridos · asignalo a los formatos que lo usen en la columna Equipamiento'); render(); } catch (er) { fail(er); } };
+    $('#f', m).onsubmit = async (e) => { e.preventDefault(); try { const r = await api('POST', '/equipamiento', { ...Object.fromEntries(new FormData(e.target)), tiene_peso: $('#n-tp', m).checked, dibujo }); m.close(); toast(r.ia === 'buscando' ? 'Equipamiento agregado · la IA está buscando información en internet; te aviso cuando haya propuestas' : 'Equipamiento agregado · asignalo a los formatos que lo usen en la columna Equipamiento'); if (r.ia === 'buscando') iaSeguir(true); render(); } catch (er) { fail(er); } };
   };
   const por = (id) => sug.find(x => x.id === Number(id));
   $$('[data-ac]', main).forEach(b => b.onclick = async () => { try { await api('POST', '/sugerencias/' + b.dataset.ac + '/aceptar', {}); toast('Agregado a la biblioteca'); render(); } catch (e) { fail(e); } });
   $$('[data-de]', main).forEach(b => b.onclick = async () => { try { await api('DELETE', '/sugerencias/' + b.dataset.de); render(); } catch (e) { fail(e); } });
   $$('[data-ver]', main).forEach(b => b.onclick = () => { const x = por(b.dataset.ver); verPosiciones({ ...x, equipo: x.equipo_clave }, eq); });
+  const tn = $('#s-nada', main); if (tn) tn.onclick = async () => { if (!(await confirmar('¿Descartar las ' + sug.length + ' sugerencias? No vuelven a aparecer.', 'Descartar', true))) return; try { const r = await api('POST', '/sugerencias/descartar-todas', {}); toast(r.descartadas + ' sugerencias descartadas'); render(); } catch (e) { fail(e); } };
+  $$('[data-iau]', main).forEach(b => b.onclick = async () => { try { await api('POST', '/equipamiento/' + encodeURIComponent(b.dataset.iau) + '/ia/dibujo', { accion: 'usar' }); toast('Dibujo guardado. Podés retocarlo con «Editar dibujo».'); render(); } catch (e) { fail(e); } });
+  $$('[data-iad]', main).forEach(b => b.onclick = async () => { try { await api('POST', '/equipamiento/' + encodeURIComponent(b.dataset.iad) + '/ia/dibujo', { accion: 'descartar' }); render(); } catch (e) { fail(e); } });
+  iaSeguir();
   const t = $('#s-todas', main); if (t) t.onclick = async () => { try { const r = await api('POST', '/sugerencias/aceptar-todas', {}); toast(r.aceptadas + ' ejercicios agregados'); render(); } catch (e) { fail(e); } };
 });
 

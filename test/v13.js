@@ -18,7 +18,7 @@ const pose = (z) => ({ t: -90, a: [90, 90], a2: null, l: [90, 90], b: null, hx: 
   try {
     await esperar();
     let r = await api('POST', '/api/setup', { username: 'dueno', password: 'Omega#2026', nombre: 'Dueño' }); const admin = r.data.token;
-    r = await api('GET', '/api/estado'); assert.match(r.data.version, /Versión 13/); paso('la app informa Versión 13');
+    r = await api('GET', '/api/estado'); assert.match(r.data.version, /Versión 1[34]/); paso('la app informa Versión 13');
 
     // ---- peso del equipamiento
     r = await api('GET', '/api/equipamiento', undefined, admin);

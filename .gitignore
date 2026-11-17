@@ -25,3 +25,4 @@ node_modules/
 .DS_Store
 installer/electron/
 src/nube-embebida.json
+src/ia-embebida.json

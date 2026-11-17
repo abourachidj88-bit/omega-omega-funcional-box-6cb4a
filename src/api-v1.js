@@ -405,8 +405,9 @@ function registrar(c) {
     let dib = null; try { dib = require('./validar-import').validarDibujo(b.dibujo) || null; } catch (e) { throw bad(e.message); }
     const pz = require('./util').pesoEquipo(b.tiene_peso, b.peso);
     run('INSERT INTO equipamiento (clave, nombre, cantidad, dibujo, tiene_peso, peso) VALUES (?,?,?,?,?,?)', k, nombre, cant, dib, pz.tiene_peso, pz.peso);
-    const n = generarSugerencias(k, nombre);
-    return { clave: k, sugerencias: n };
+    // V14: las propuestas las genera la IA (si hay clave e internet); sin conexión no se genera nada
+    const iaEstado = require('./api-v14').iniciar(k, nombre);
+    return { clave: k, sugerencias: 0, ia: iaEstado };
   });
   route('PUT', '/api/equipamiento/:clave', ADM, async ({ req, params }) => {
     const b = await readBody(req);
@@ -428,7 +429,7 @@ function registrar(c) {
   route('GET', '/api/sugerencias', STAFF, () => sugerenciasPend());
   function aceptar(s) {
     if (!get('SELECT 1 AS x FROM ejercicios WHERE activo = 1 AND zona = ? AND nombre = ? COLLATE NOCASE', s.zona, s.nombre)) {
-      const cl = require('./estimulos').clasificar(s.zona, s.patron, s.nombre, null);
+      const cl = s.ia && s.capacidad && s.energia ? { capacidad: s.capacidad, energia: s.energia } : require('./estimulos').clasificar(s.zona, s.patron, s.nombre, null);
       run("INSERT INTO ejercicios (zona, nombre, prog2, prog3, equipo, unidades, patron, origen, capacidad, energia) VALUES (?,?,?,?,?,1,?,'sugerido',?,?)", s.zona, s.nombre, s.prog2, s.prog3, s.equipo_clave, s.patron || require('./estimulos').ILUSTRACION[require('./estimulos').claveDeZona(s.zona)] || 'sentadilla', cl.capacidad, cl.energia);
     }
     run("UPDATE sugerencias SET estado = 'aceptada' WHERE id = ?", s.id);

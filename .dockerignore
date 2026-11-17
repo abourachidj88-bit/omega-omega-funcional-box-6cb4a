@@ -5,3 +5,4 @@ test
 demo
 *.db
 src/nube-embebida.json
+src/ia-embebida.json
