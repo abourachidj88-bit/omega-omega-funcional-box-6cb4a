@@ -20,7 +20,7 @@ function copiaApp(rev, romper) {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'omega-nube-'));
   for (const f of ['server.js', 'lanzador.js', 'package.json']) fs.copyFileSync(path.join(ROOT, f), path.join(d, f));
   for (const c of ['src', 'public', 'scripts']) fs.cpSync(path.join(ROOT, c), path.join(d, c), { recursive: true });
-  fs.writeFileSync(path.join(d, 'src', 'version.js'), "'use strict';\nmodule.exports = { numero: 12, nombre: 'Versión 12', fecha: '2026-11-16', revision: " + rev + " };\n");
+  fs.writeFileSync(path.join(d, 'src', 'version.js'), "'use strict';\nmodule.exports = { numero: 14, nombre: 'Versión 14', fecha: '2026-11-18', revision: " + rev + " };\n");
   if (romper) fs.appendFileSync(path.join(d, 'server.js'), "\nthrow new Error('versión rota a propósito');\n");
   return d;
 }
@@ -49,7 +49,7 @@ async function hasta(f, ms = 25000) { const t = Date.now(); while (Date.now() - 
     let r = await api(pcBase, 'POST', '/api/setup', { username: 'dueno', password: 'Omega#2026', nombre: 'Dueño' }); const adm = r.data.token;
     r = await api(pcBase, 'POST', '/api/actualizacion/buscar', {}, adm); assert.equal(r.status, 200); assert.equal(r.data.disponible, null, JSON.stringify(r.data)); assert.equal(r.data.error, null, JSON.stringify(r.data)); paso('con la misma versión en la web, no hay actualización');
     r = await api(pcBase, 'POST', '/api/actualizacion/ahora', {}, adm); assert.equal(r.data.estado, 'al_dia', JSON.stringify(r.data)); assert.match(r.data.mensaje, /Ya tenés la versión más actualizada/); paso('con la última versión instalada, el botón dice "Ya tenés la versión más actualizada" y no actualiza nada');
-    r = await api(pcBase, 'GET', '/api/actualizacion/estado', undefined, adm); assert.equal(r.data.version.numero, 12); assert.equal(r.data.origen, 'instalador'); paso('registra la versión instalada y su origen');
+    r = await api(pcBase, 'GET', '/api/actualizacion/estado', undefined, adm); assert.equal(r.data.version.numero, 13); assert.equal(r.data.origen, 'instalador'); paso('registra la versión instalada y su origen');
     r = await api(pcBase, 'POST', '/api/actualizacion/ahora', {}, undefined); assert.equal(r.status, 401); paso('solo el administrador puede actualizar');
     r = await api(nubeBase, 'POST', '/api/actualizacion', { accion: 'info' }); assert.equal(r.status, 401); paso('la web no entrega su código sin la clave de conexión');
     hijos[0].kill();

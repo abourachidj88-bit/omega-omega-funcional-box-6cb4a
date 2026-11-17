@@ -60,4 +60,12 @@ function esFecha(s) {
   return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(parseFecha(s));
 }
 
-module.exports = { nowAR, parseFecha, fmtFecha, addDays, diffDays, dowDe, lunesDe, addMeses, mesesEntre, esFecha };
+// V13: peso del equipamiento. Devuelve { tiene_peso, peso } validado; "peso" es texto libre en kg ("12", "4 a 20"). Sin tilde, el peso queda vacío.
+function pesoEquipo(tiene, peso, previo) {
+  const t = tiene === undefined ? !!(previo && previo.tiene_peso) : (tiene === true || tiene === 1 || tiene === '1' || tiene === 'on' || tiene === 'true');
+  if (!t) return { tiene_peso: 0, peso: null };
+  const v = String(peso === undefined ? (previo && previo.peso) || '' : peso).replace(/kg/ig, '').replace(/\s+/g, ' ').trim().slice(0, 20);
+  if (!/\d/.test(v) || !/^[0-9.,\-–\/ a-zA-Zá]*$/.test(v)) { const e = new Error('Escribí el peso en kg (por ejemplo 12 o 4 a 20)'); e.status = 400; throw e; }
+  return { tiene_peso: 1, peso: v };
+}
+module.exports = { pesoEquipo, nowAR, parseFecha, fmtFecha, addDays, diffDays, dowDe, lunesDe, addMeses, mesesEntre, esFecha };

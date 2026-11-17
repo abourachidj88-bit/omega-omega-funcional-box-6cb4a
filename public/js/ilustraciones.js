@@ -317,15 +317,17 @@
   const EQUIPOS_ESCENA = ['colchoneta', 'cajon', 'banco', 'barra_dominadas', 'conos', 'soga', 'banda_rtx'];
   const EQUIPOS_DIB = EQUIPOS_MANO.concat(EQUIPOS_ESCENA);
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+  // V13: tamaño de la persona (pose.z de 0,4 a 1): se achica alrededor de la cadera para que entre todo el rango de movimiento
+  const escalaDe = (o) => SC * clamp(o && o.z != null ? Number(o.z) || 1 : 1, 0.4, 1);
 
   function apoyar(o, air) {
     const k = cinematica(o), pts = puntos(k);
     const maxY = Math.max(...pts.map(p => p[1])), minX = Math.min(...pts.map(p => p[0])), maxX = Math.max(...pts.map(p => p[0]));
-    o.hy = Math.round(clamp(SUELO - SC * maxY - (air || 0), 12, 150) * 10) / 10;
-    o.hx = Math.round(clamp(100 - SC * (minX + maxX) / 2, 20, 180) * 10) / 10;
+    o.hy = Math.round(clamp(SUELO - escalaDe(o) * maxY - (air || 0), 12, 150) * 10) / 10;
+    o.hx = Math.round(clamp(100 - escalaDe(o) * (minX + maxX) / 2, 20, 180) * 10) / 10;
     return o;
   }
-  function apoyarSuelo(o) { const k = cinematica(o), pts = puntos(k); const maxY = Math.max(...pts.map(p => p[1])); o.hy = Math.round(clamp(SUELO - SC * maxY, 12, 150) * 10) / 10; return o; }
+  function apoyarSuelo(o) { const k = cinematica(o), pts = puntos(k); const maxY = Math.max(...pts.map(p => p[1])); o.hy = Math.round(clamp(SUELO - escalaDe(o) * maxY, 12, 150) * 10) / 10; return o; }
 
   // Pose inicial para el diseñador: parte de una de las ilustraciones automáticas (con los ángulos ya resueltos)
   function plantilla(patron) {
@@ -397,7 +399,8 @@
   function pose2svg(pose, opt = {}) {
     const col = opt.color || '#ff6b35', atras = '#8a93a3', sueloC = '#6b7686', prop = '#4da3ff', naranja = '#ff8a3d';
     const hx = pose.hx ?? 100, hy = pose.hy ?? 78;
-    const k = cinematica(pose), T = (p) => [p[0] * SC + hx, p[1] * SC + hy];
+    const SCz = escalaDe(pose);
+    const k = cinematica(pose), T = (p) => [p[0] * SCz + hx, p[1] * SCz + hy];
     const hip = T(k.hip), sh = T(k.sh), cab = T(k.cab);
     const q = (a) => ({ el: T(a.el), mu: T(a.mu), mano: T(a.mano) });
     const q1 = q(k.A1), q2 = q(k.A2);
@@ -412,7 +415,7 @@
     for (const it of items) if (!enMano(it.k)) s += `<g data-it="${it.i}">${escalar(it, DIB[it.k] ? glifoCustom(DIB[it.k], it.x, it.y) : glifoEscena(it.k, it.x, it.y, prop, naranja, it.k === 'banda_rtx' ? q1.mano : null))}</g>`;
     s += ln([hip, l2.ro, l2.to, l2.dedo], atras, 3.6) + ln([sh, q2.el, q2.mu], atras, 3.6);
     s += ln([hip, sh], col, 5);
-    s += `<circle cx="${f1(cab[0])}" cy="${f1(cab[1])}" r="${f1(LG.hd * SC * 0.8)}" fill="none" stroke="${col}" stroke-width="2.6"/>`;
+    s += `<circle cx="${f1(cab[0])}" cy="${f1(cab[1])}" r="${f1(LG.hd * SCz * 0.8)}" fill="none" stroke="${col}" stroke-width="2.6"/>`;
     s += ln([hip, l1.ro, l1.to, l1.dedo], col, 4.4) + ln([sh, q1.el, q1.mu], col, 4.4);
     for (const p of [l1.ro, q1.el]) s += `<circle cx="${f1(p[0])}" cy="${f1(p[1])}" r="2.2" fill="none" stroke="${col}" stroke-width="1.4"/>`;
     for (const it of items) if (enMano(it.k)) s += `<g data-it="${it.i}">${escalar(it, DIB[it.k] ? glifoCustom(DIB[it.k], it.x, it.y) : glifoMano(it.k, [it.x, it.y], 0, prop))}</g>`;
@@ -432,7 +435,7 @@
   const dibujoGlifoBase = (k) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 40" width="48" height="32">${EQUIPOS_MANO.includes(k) ? glifoMano(k, [30, 20], 0, '#4da3ff') : glifoEscena(k, 30, 30, '#4da3ff', '#ff8a3d', null)}</svg>`.replace(/<rect x="[\d.-]+" y="[\d.-]+" width="172"/, '<rect x="2" y="30" width="56"');
 
   const dibujoGlifo = (k) => DIB[k] ? miniEquipo(k, 48, 32) : (EQUIPOS_MANO.includes(k) || EQUIPOS_ESCENA.includes(k)) ? dibujoGlifoBase(k) : miniEquipo(k, 48, 32);
-  const api = { svg, tira, PATRONES: Object.keys(PAT), NOMBRES, cinematica, plantilla, poseVacia, apoyarSuelo, pose2svg, aDataUrl, dibujoGlifo, EQUIPOS_DIB, EQUIPOS_MANO, SC, SUELO, setDibujos, miniEquipo, glifoCustom, formasSvg, enMano };
+  const api = { svg, tira, PATRONES: Object.keys(PAT), NOMBRES, cinematica, plantilla, poseVacia, apoyarSuelo, pose2svg, aDataUrl, escalaDe, dibujoGlifo, EQUIPOS_DIB, EQUIPOS_MANO, SC, SUELO, setDibujos, miniEquipo, glifoCustom, formasSvg, enMano };
   if (typeof window !== 'undefined') window.Ilustra = api;
   if (typeof module !== 'undefined') module.exports = api;
 })();

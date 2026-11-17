@@ -295,6 +295,19 @@ function seedV7() {
     setConfig('permisos_v7', '1');
   });
 }
-if (sync.NODO !== 'nube') { seed(); seedV1(); seedV2(); seedV6(); seedV7(); }
+// Versión 13: el equipamiento que ya traía el peso en el nombre ("Mancuernas (4 a 20 kg)", "Discos 10 Kg") queda con el tilde y el valor cargados (una sola vez)
+function seedV13() {
+  tx(() => {
+    if (getConfig('peso_v13')) return;
+    for (const e of all('SELECT clave, nombre FROM equipamiento WHERE tiene_peso = 0 AND peso IS NULL')) {
+      const m = /\(([^)]*kg[^)]*)\)/i.exec(e.nombre) || /(\d+(?:[.,]\d+)?\s*kg)/i.exec(e.nombre);
+      if (!m) continue;
+      const v = m[1].replace(/kg/ig, '').replace(/\s+/g, ' ').trim();
+      if (/\d/.test(v)) run('UPDATE equipamiento SET tiene_peso = 1, peso = ? WHERE clave = ?', v, e.clave);
+    }
+    setConfig('peso_v13', '1');
+  });
+}
+if (sync.NODO !== 'nube') { seed(); seedV1(); seedV2(); seedV6(); seedV7(); seedV13(); }
 
 module.exports = { db, all, get, run, tx, getConfig, setConfig, DATA_DIR, DB_PATH, ZONAS, seedV1, seedV2, PAISES };

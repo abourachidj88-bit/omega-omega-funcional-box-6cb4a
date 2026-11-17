@@ -344,11 +344,13 @@ vista('/planificacion/equipos', ['admin', 'profesor'], async (main) => {
     <div class="eq-grid">${lista.map(e => `<div class="card eq-card" data-k="${esc(e.clave)}"><div class="eq-dib" title="${editar ? 'Tocá para editar el dibujo' : ''}" ${editar ? `data-dib="${esc(e.clave)}"` : ''} style="cursor:${editar ? 'pointer' : 'default'}">${Ilustra.miniEquipo(e.clave, 132, 88)}</div>
       <div class="eq-nom"><b>${esc(e.nombre)}</b></div>
       <div class="row" style="gap:6px;align-items:center;flex-wrap:nowrap"><label class="small muted" style="margin:0">Cantidad</label><input type="number" min="0" data-c="${esc(e.clave)}" value="${e.cantidad}" style="width:84px"></div>
+      <div class="row" style="gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px"><label class="small" style="margin:0;display:flex;gap:4px;align-items:center;white-space:nowrap"><input type="checkbox" data-tp="${esc(e.clave)}" ${e.tiene_peso ? 'checked' : ''} ${editar ? '' : 'disabled'}> Tiene peso</label><input data-pk="${esc(e.clave)}" value="${esc(e.peso || '')}" placeholder="kg (ej. 12 o 4 a 20)" maxlength="20" style="flex:1 1 90px;min-width:0;max-width:150px;${e.tiene_peso ? '' : 'display:none'}" ${editar ? '' : 'disabled'}><span class="small muted" ${e.tiene_peso ? '' : 'hidden'} data-pku="${esc(e.clave)}">kg</span></div>
       ${editar ? `<div class="row" style="gap:6px;margin-top:6px"><button class="sm" data-dib="${esc(e.clave)}">✎ ${e.dibujo ? 'Editar dibujo' : 'Dibujar'}</button>${e.dibujo ? `<button class="ghost sm" data-qdib="${esc(e.clave)}" title="Volver al dibujo original">↺</button>` : ''}</div>` : ''}</div>`).join('')}</div>`;
   ligarEquipos(main, fmts, eq, () => {});
+  $$('[data-tp]', main).forEach(c => c.onchange = () => { const k = c.dataset.tp, pk = $('[data-pk="' + k + '"]', main), u = $('[data-pku="' + k + '"]', main); pk.style.display = c.checked ? '' : 'none'; u.hidden = !c.checked; if (c.checked) pk.focus(); });
   const vt = $('#ver-todo', main); if (vt) vt.onclick = () => { eqFormatoSel = null; render(); };
   $('#ok', main).onclick = async () => {
-    try { await api('PUT', '/equipamiento', { equipamiento: $$('[data-c]', main).map(i => ({ clave: i.dataset.c, cantidad: i.value })) }); toast('Guardado. Rehacé la semana para aplicarlo.'); render(); } catch (e) { fail(e); }
+    try { await api('PUT', '/equipamiento', { equipamiento: $$('[data-c]', main).map(i => { const k = i.dataset.c, tp = $('[data-tp="' + k + '"]', main), pk = $('[data-pk="' + k + '"]', main); return { clave: k, cantidad: i.value, ...(tp && !tp.disabled ? { tiene_peso: tp.checked, peso: pk ? pk.value : '' } : {}) }; }) }); toast('Guardado. Rehacé la semana para aplicarlo.'); render(); } catch (e) { fail(e); }
   };
   $$('[data-dib]', main).forEach(b => b.onclick = async (ev) => {
     ev.stopPropagation();
@@ -364,6 +366,7 @@ vista('/planificacion/equipos', ['admin', 'profesor'], async (main) => {
   $('#nuevo', main).onclick = () => {
     let dibujo = null;
     const m = modal('Nuevo equipamiento', `<form id="f" class="stack"><div class="fgrid">${campo('Nombre', '<input name="nombre" required placeholder="Ej.: Cintas TRX" autocomplete="off">')}${campo('Cantidad', '<input name="cantidad" type="number" min="0" value="1" required>')}</div>
+      <div class="field"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="tiene_peso" id="n-tp"> Tiene peso</label><input name="peso" id="n-pk" placeholder="Peso en kg (ej.: 12 o 4 a 20)" maxlength="20" style="display:none;max-width:260px"></div>
       <div class="field"><label>Dibujo del equipamiento</label><div class="row" style="gap:10px;align-items:center"><div id="mini-nuevo" style="min-width:132px">${Ilustra.miniEquipo('__nuevo', 132, 88)}</div><button type="button" id="dib-nuevo">✎ Dibujar</button></div><div class="small muted">Con este dibujo vas a poder usarlo en “Dibujar las 3 posiciones” de la biblioteca de ejercicios.</div></div>
       <div class="infobox">Al guardarlo, la IA te propone ejercicios nuevos que usen este equipamiento para sumarlos a la biblioteca y a las próximas planificaciones.</div>
       <div class="row" style="justify-content:flex-end"><button type="button" data-close>Cancelar</button><button class="primary">Agregar</button></div></form>`);
@@ -372,7 +375,8 @@ vista('/planificacion/equipos', ['admin', 'profesor'], async (main) => {
       const d = await editarDibujoEquipo({ nombre, dibujo });
       if (d) { dibujo = d; Ilustra.setDibujos([...eq, { clave: '__nuevo', dibujo: d }]); $('#mini-nuevo', m).innerHTML = Ilustra.miniEquipo('__nuevo', 132, 88); }
     };
-    $('#f', m).onsubmit = async (e) => { e.preventDefault(); try { const r = await api('POST', '/equipamiento', { ...Object.fromEntries(new FormData(e.target)), dibujo }); m.close(); toast('Equipamiento agregado · ' + r.sugerencias + ' ejercicios sugeridos · asignalo a los formatos que lo usen en la columna Equipamiento'); render(); } catch (er) { fail(er); } };
+    $('#n-tp', m).onchange = (ev) => { const i = $('#n-pk', m); i.style.display = ev.target.checked ? '' : 'none'; if (ev.target.checked) i.focus(); };
+    $('#f', m).onsubmit = async (e) => { e.preventDefault(); try { const r = await api('POST', '/equipamiento', { ...Object.fromEntries(new FormData(e.target)), tiene_peso: $('#n-tp', m).checked, dibujo }); m.close(); toast('Equipamiento agregado · ' + r.sugerencias + ' ejercicios sugeridos · asignalo a los formatos que lo usen en la columna Equipamiento'); render(); } catch (er) { fail(er); } };
   };
   const por = (id) => sug.find(x => x.id === Number(id));
   $$('[data-ac]', main).forEach(b => b.onclick = async () => { try { await api('POST', '/sugerencias/' + b.dataset.ac + '/aceptar', {}); toast('Agregado a la biblioteca'); render(); } catch (e) { fail(e); } });

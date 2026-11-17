@@ -141,6 +141,7 @@ function validarPoses(v) {
         return { k: it.k, x: num(it.x ?? 100, -20, 220, 'x'), y: num(it.y ?? 100, -20, 220, 'y'), m: [0, 1, 2].includes(Number(it.m)) ? Number(it.m) : 0, s: it.s === undefined || it.s === null ? 1 : num(it.s, 0.4, 3.5, 'tamaño') };
       }) };
     if (p.ht !== undefined && p.ht !== null) out.ht = num(p.ht, -720, 720, 'cabeza');
+    if (p.z !== undefined && p.z !== null && Number(p.z) !== 1) out.z = Math.round(num(p.z, 0.4, 1, 'tamaño de la persona') * 100) / 100;   // V13: tamaño de la figura (40 % a 100 %)
     return out;
   });
   return JSON.stringify({ v: 1, poses });

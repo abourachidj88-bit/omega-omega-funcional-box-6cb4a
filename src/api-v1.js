@@ -403,7 +403,8 @@ function registrar(c) {
     if (get('SELECT 1 AS x FROM equipamiento WHERE nombre = ? COLLATE NOCASE', nombre)) throw bad('Ya existe un equipamiento con ese nombre: actualizá su cantidad');
     let k = clave, i = 2; while (get('SELECT 1 AS x FROM equipamiento WHERE clave = ?', k)) k = clave + '_' + i++;
     let dib = null; try { dib = require('./validar-import').validarDibujo(b.dibujo) || null; } catch (e) { throw bad(e.message); }
-    run('INSERT INTO equipamiento (clave, nombre, cantidad, dibujo) VALUES (?,?,?,?)', k, nombre, cant, dib);
+    const pz = require('./util').pesoEquipo(b.tiene_peso, b.peso);
+    run('INSERT INTO equipamiento (clave, nombre, cantidad, dibujo, tiene_peso, peso) VALUES (?,?,?,?,?,?)', k, nombre, cant, dib, pz.tiene_peso, pz.peso);
     const n = generarSugerencias(k, nombre);
     return { clave: k, sugerencias: n };
   });
@@ -414,7 +415,8 @@ function registrar(c) {
     const cant = b.cantidad !== undefined ? parseInt(b.cantidad, 10) : e.cantidad;
     if (!(cant >= 0 && cant <= 999)) throw bad('Cantidad inválida');
     let dib = e.dibujo; try { const d = require('./validar-import').validarDibujo(b.dibujo); if (d !== undefined) dib = d; } catch (er) { throw bad(er.message); }
-    run('UPDATE equipamiento SET nombre = ?, cantidad = ?, dibujo = ? WHERE clave = ?', str(b.nombre ?? e.nombre, 60) || e.nombre, cant, dib, e.clave);
+    const pz = require('./util').pesoEquipo(b.tiene_peso, b.peso, e);
+    run('UPDATE equipamiento SET nombre = ?, cantidad = ?, dibujo = ?, tiene_peso = ?, peso = ? WHERE clave = ?', str(b.nombre ?? e.nombre, 60) || e.nombre, cant, dib, pz.tiene_peso, pz.peso, e.clave);
     return { ok: true };
   });
   route('POST', '/api/equipamiento/:clave/sugerir', ADM, ({ params }) => {

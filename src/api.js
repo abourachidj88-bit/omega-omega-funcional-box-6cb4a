@@ -665,7 +665,10 @@ route('GET', '/api/equipamiento', STAFF, () => all('SELECT * FROM equipamiento O
 route('PUT', '/api/equipamiento', ADM, async ({ req }) => {
   const b = await readBody(req);
   tx(() => {
-    for (const e of (b.equipamiento || [])) { const q = parseInt(e.cantidad, 10); if (q >= 0) run('UPDATE equipamiento SET cantidad = ? WHERE clave = ?', q, String(e.clave)); }
+    for (const e of (b.equipamiento || [])) {
+      const q = parseInt(e.cantidad, 10); if (q >= 0) run('UPDATE equipamiento SET cantidad = ? WHERE clave = ?', q, String(e.clave));
+      if (e.tiene_peso !== undefined) { const act = get('SELECT * FROM equipamiento WHERE clave = ?', String(e.clave)); if (act) { const pz = require('./util').pesoEquipo(e.tiene_peso, e.peso, act); run('UPDATE equipamiento SET tiene_peso = ?, peso = ? WHERE clave = ?', pz.tiene_peso, pz.peso, act.clave); } }
+    }
     if (b.capacidad_clase !== undefined) { const c = parseInt(b.capacidad_clase, 10); if (c >= 5 && c <= 60) setConfig('capacidad_clase', c); }
     if (b.estaciones !== undefined) { const c = parseInt(b.estaciones, 10); if (c >= 3 && c <= 10) setConfig('estaciones', c); }
   });

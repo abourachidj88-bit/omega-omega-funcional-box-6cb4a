@@ -253,17 +253,19 @@ async function bloqueMisSeguimientos(el) {
 
 // ---------- Ajustes · Depurar la base (eliminar de verdad; solo administrador) ----------
 async function bloqueDepurar(el) {
-  let rama = 'clientes', filtro = '', estado = 'todos', meses = 12;
+  let rama = 'clientes', filtro = '', estado = 'todos', meses = 12, fuente = 'ia', grupoE = 'patrones';
   const sel = new Set();
   const datos = {};
   async function cargarRama() {
     if (rama === 'clientes') datos.clientes = await api('GET', '/depurar/clientes');
     else if (rama === 'perdidos') datos.perdidos = await api('GET', '/depurar/perdidos?meses=' + meses);
+    else if (rama === 'biblioteca') { const r = await Promise.all([api('GET', '/depurar/ejercicios'), estimulos()]); datos.ejercicios = r[0]; datos.est = r[1]; }
     else datos.rutinas = await api('GET', '/depurar/rutinas');
     pintar();
   }
   function pintar() {
     let cuerpo = '';
+    el.style.gridColumn = rama === 'biblioteca' ? '1 / -1' : '';   // la lista de ejercicios necesita todo el ancho
     if (rama === 'clientes') {
       const l = (datos.clientes || []).filter(c => (estado === 'todos' || (estado === 'activos') === c.activo) && (!filtro || norm(c.nombre).includes(norm(filtro))));
       cuerpo = `<p class="small muted">Los clientes normalmente <b>se inhabilitan, no se eliminan</b>. Esto los borra de la base junto con su historial (pagos, asistencias, seguimiento y rutinas); no se puede deshacer. Tildá los que quieras eliminar.</p>
@@ -278,6 +280,23 @@ async function bloqueDepurar(el) {
         <div class="row" style="flex-wrap:wrap;align-items:flex-end"><div class="field" style="margin:0"><label>Perdidos hace más de</label><select id="dp-m" style="width:auto">${[3, 6, 12, 18, 24, 36].map(n => `<option value="${n}" ${n === meses ? 'selected' : ''}>${n} meses${n === 12 ? ' (1 año)' : n === 24 ? ' (2 años)' : ''}</option>`).join('')}</select></div>
         <span class="small">Hay <b>${d.total}</b> perdidos en total; <b>${d.antiguos}</b> con más de ${meses} meses (hasta el ${fmtF(d.hasta)}).</span></div>
         <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="danger" id="dp-go" ${d.antiguos ? '' : 'disabled'}>Eliminar ${d.antiguos} perdidos de la base</button></div>`;
+    } else if (rama === 'biblioteca') {
+      const todos = (datos.ejercicios || []), nIA = todos.filter(e => e.fuente === 'ia').length, nPR = todos.length - nIA;
+      const l = todos.filter(e => e.fuente === fuente && (!filtro || norm(e.nombre + ' ' + e.zona).includes(norm(filtro))));
+      const est = datos.est || { patrones: [], capacidades: [], energias: [] };
+      const cl = (e, k) => String(e[k] || '').split(',').filter(Boolean);
+      const secciones = est[grupoE].map(o => ({ o, items: l.filter(e => grupoE === 'patrones' ? e.zona === o.nombre : cl(e, grupoE === 'capacidades' ? 'capacidad' : 'energia').includes(o.clave)) })).filter(x => x.items.length);
+      const idsVisibles = new Set(l.map(e => e.id));
+      const tildadosVis = [...sel].filter(id => idsVisibles.has(id)).length;
+      cuerpo = `<p class="small muted">Quitar un ejercicio lo saca de la biblioteca y de las próximas planificaciones; las rutinas y los circuitos ya armados lo conservan. Los <b>importados por IA</b> son los que trajo el programa o aceptaste de las sugerencias; los <b>creados por el usuario</b> los cargó alguien del gimnasio.</p>
+        <div class="tabs" style="margin-bottom:8px"><button data-f="ia" class="${fuente === 'ia' ? 'on' : ''}">Importados por IA <span class="pill">${nIA}</span></button><button data-f="propio" class="${fuente === 'propio' ? 'on' : ''}">Creados por el usuario <span class="pill">${nPR}</span></button></div>
+        <div class="row" style="flex-wrap:wrap;margin-bottom:8px;align-items:center"><input id="dp-q" placeholder="Buscar ejercicio…" value="${esc(filtro)}" style="max-width:220px">
+          <select id="dp-g" style="width:auto">${GRUPOS_EST.map(([g, t]) => `<option value="${g}" ${g === grupoE ? 'selected' : ''}>${esc(t.replace('Estímulos de ', 'Por ').replace('Estímulos del ', 'Por '))}</option>`).join('')}</select>
+          <button class="sm" id="dp-todos-b">Seleccionar todos (${l.length})</button><button class="sm ghost" id="dp-ning">Destildar todo</button></div>
+        ${grupoE !== 'patrones' ? '<div class="small muted" style="margin-bottom:6px">Un ejercicio puede sumar varias capacidades o sistemas energéticos: aparece en cada uno, pero es el mismo y se tilda en todos a la vez.</div>' : ''}
+        <div style="max-height:380px;overflow:auto">${secciones.map(({ o, items }) => { const nt = items.filter(e => sel.has(e.id)).length; return `<div class="card" style="margin:0 0 8px;padding:8px 10px"><div class="row between" style="align-items:center"><label style="margin:0;display:flex;gap:6px;align-items:center"><input type="checkbox" data-sec="${esc(o.clave)}" ${nt === items.length ? 'checked' : ''}><b>${esc(o.nombre)}</b> <span class="pill">${items.length}</span></label><span class="small muted">${nt ? nt + ' tildados' : ''}</span></div>
+          <table style="margin-top:4px"><tbody>${items.map(e => `<tr style="cursor:default"><td style="width:28px"><input type="checkbox" data-s="${e.id}" ${sel.has(e.id) ? 'checked' : ''}></td><td>${esc(e.nombre)}</td><td class="small muted">${esc(e.equipo_nombre)}</td><td class="small muted num">${e.en_rutinas ? 'en ' + e.en_rutinas + ' rutina(s)' : ''}</td></tr>`).join('')}</tbody></table></div>`; }).join('') || '<div class="empty">No hay ejercicios en esta pestaña.</div>'}</div>
+        <div class="row" style="justify-content:flex-end;margin-top:10px;align-items:center;gap:10px"><span class="small muted">${tildadosVis} tildados</span><button class="danger" id="dp-go" ${tildadosVis ? '' : 'disabled'}>Quitar de la biblioteca (${tildadosVis})</button></div>`;
     } else {
       const l = (datos.rutinas || []).filter(r => !filtro || norm(r.nombre + ' ' + r.profesor).includes(norm(filtro)));
       cuerpo = `<p class="small muted">Las rutinas normalmente <b>se inhabilitan, no se eliminan</b>. Esto las borra de la base y las saca de los alumnos que las tienen asignadas; no se puede deshacer.</p>
@@ -287,13 +306,23 @@ async function bloqueDepurar(el) {
         <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="danger" id="dp-go" ${sel.size ? '' : 'disabled'}>Eliminar de la base (${sel.size})</button></div>`;
     }
     el.innerHTML = `<h3>Depurar la base</h3><p class="small muted">Eliminar es una acción excepcional del administrador. Elegí qué querés depurar:</p>
-      <div class="row" style="flex-wrap:wrap;margin-bottom:10px"><button class="sm ${rama === 'clientes' ? 'primary' : ''}" data-r="clientes">Clientes</button><button class="sm ${rama === 'perdidos' ? 'primary' : ''}" data-r="perdidos">CRM · Clientes perdidos</button><button class="sm ${rama === 'rutinas' ? 'primary' : ''}" data-r="rutinas">Rutinas personalizadas</button></div>${cuerpo}`;
+      <div class="row" style="flex-wrap:wrap;margin-bottom:10px"><button class="sm ${rama === 'clientes' ? 'primary' : ''}" data-r="clientes">Clientes</button><button class="sm ${rama === 'perdidos' ? 'primary' : ''}" data-r="perdidos">CRM · Clientes perdidos</button><button class="sm ${rama === 'rutinas' ? 'primary' : ''}" data-r="rutinas">Rutinas personalizadas</button><button class="sm ${rama === 'biblioteca' ? 'primary' : ''}" data-r="biblioteca">Biblioteca de ejercicios</button></div>${cuerpo}`;
     $$('[data-r]', el).forEach(b => b.onclick = () => { rama = b.dataset.r; sel.clear(); filtro = ''; cargarRama().catch(fail); });
     $$('[data-s]', el).forEach(c => c.onchange = () => { const id = Number(c.dataset.s); c.checked ? sel.add(id) : sel.delete(id); pintar(); });
     const q = $('#dp-q', el); if (q) q.oninput = () => { filtro = q.value; const pos = q.selectionStart; pintar(); const n = $('#dp-q', el); n.focus(); n.setSelectionRange(pos, pos); };
     const de = $('#dp-e', el); if (de) de.onchange = () => { estado = de.value; pintar(); };
     const dt = $('#dp-todos', el); if (dt) dt.onclick = () => { (datos.clientes || []).filter(c => (estado === 'todos' || (estado === 'activos') === c.activo) && (!filtro || norm(c.nombre).includes(norm(filtro)))).forEach(c => sel.add(c.id)); pintar(); };
     const dn = $('#dp-ning', el); if (dn) dn.onclick = () => { sel.clear(); pintar(); };
+    $$('[data-f]', el).forEach(b => b.onclick = () => { fuente = b.dataset.f; sel.clear(); pintar(); });
+    const dg = $('#dp-g', el); if (dg) dg.onchange = () => { grupoE = dg.value; pintar(); };
+    const filtrados = () => (datos.ejercicios || []).filter(e => e.fuente === fuente && (!filtro || norm(e.nombre + ' ' + e.zona).includes(norm(filtro))));
+    const db2 = $('#dp-todos-b', el); if (db2) db2.onclick = () => { filtrados().forEach(e => sel.add(e.id)); pintar(); };
+    $$('[data-sec]', el).forEach(c => c.onchange = () => {
+      const o = ((datos.est || {})[grupoE] || []).find(x => x.clave === c.dataset.sec); if (!o) return;
+      const cl2 = (e, k) => String(e[k] || '').split(',').filter(Boolean);
+      filtrados().filter(e => grupoE === 'patrones' ? e.zona === o.nombre : cl2(e, grupoE === 'capacidades' ? 'capacidad' : 'energia').includes(o.clave)).forEach(e => c.checked ? sel.add(e.id) : sel.delete(e.id));
+      pintar();
+    });
     const dm = $('#dp-m', el); if (dm) dm.onchange = () => { meses = Number(dm.value); cargarRama().catch(fail); };
     const go = $('#dp-go', el); if (go) go.onclick = async () => {
       try {
@@ -304,6 +333,10 @@ async function bloqueDepurar(el) {
         } else if (rama === 'perdidos') {
           if (!(await confirmar('¿Eliminar de la base los clientes perdidos de hace más de ' + meses + ' meses? No se puede deshacer.', 'Eliminar', true))) return;
           const r = await api('POST', '/depurar/perdidos', { meses }); toast(r.eliminados + ' perdidos eliminados');
+        } else if (rama === 'biblioteca') {
+          const vis = new Set(filtrados().map(e => e.id)), lista = [...sel].filter(id => vis.has(id)), enR = (datos.ejercicios || []).filter(e => lista.includes(e.id) && e.en_rutinas).length;
+          if (!(await confirmar('¿Quitar ' + lista.length + ' ejercicio(s) de la biblioteca?' + (enR ? ' ' + enR + ' de ellos están en rutinas de alumnos: las rutinas los conservan.' : '') + ' Dejan de usarse en las próximas planificaciones.', 'Quitar', true))) return;
+          const r = await api('POST', '/depurar/ejercicios', { ids: lista }); toast(r.eliminados + ' ejercicios quitados de la biblioteca');
         } else {
           const act = (datos.rutinas || []).filter(r => sel.has(r.id) && r.activo).length;
           if (!(await confirmar('¿Eliminar de la base ' + sel.size + ' rutina(s)? Se sacan también de los alumnos que las tienen. No se puede deshacer.' + (act ? ' ATENCIÓN: ' + act + ' están activas.' : ''), 'Eliminar', true))) return;

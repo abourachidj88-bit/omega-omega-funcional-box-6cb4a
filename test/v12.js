@@ -19,7 +19,7 @@ async function esperar() { for (let i = 0; i < 80; i++) { try { await fetch(BASE
   try {
     await esperar();
     let r = await api('POST', '/api/setup', { username: 'dueno', password: 'Omega#2026', nombre: 'Dueño' }); const admin = r.data.token;
-    r = await api('GET', '/api/estado'); assert.match(r.data.version, /Versión 12/); paso('la app informa Versión 12');
+    r = await api('GET', '/api/estado'); assert.match(r.data.version, /Versión 1[23]/); paso('la app informa la versión actual');
     r = await api('GET', '/api/formatos', undefined, admin);
     assert.ok(r.data.length >= 6 && r.data.every(f => Array.isArray(f.equipos) && f.equipos.length === 0)); paso('los formatos arrancan usando todo el equipamiento (lista vacía)');
     const id = r.data[0].id;

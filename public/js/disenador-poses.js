@@ -41,7 +41,10 @@ function disenarPosiciones({ poses, patronBase, zona, eq }) {
             <label class="small row" style="gap:4px;margin:0"><input type="checkbox" id="ind-p"> Piernas independientes</label>
             <button type="button" class="sm" id="suelo" title="Baja o sube el cuerpo hasta apoyar en el piso">Apoyar en el piso</button>
             
-            <button type="button" class="sm" id="play">▶ Ver movimiento</button></div></div>
+            <button type="button" class="sm" id="play">▶ Ver movimiento</button></div>
+          <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px" title="Achica la figura para que entre todo el rango de movimiento dentro del dibujo">
+            <label class="small" style="margin:0">Tamaño de la persona</label><input type="range" id="zoom" min="40" max="100" step="5" value="100" style="width:130px;flex:0 0 130px"><span class="small muted" id="zoomv" style="min-width:38px">100%</span>
+            <button type="button" class="sm" id="ajustar" title="Elige el tamaño más grande con el que las 3 posiciones entran completas en el cuadro">Ajustar al cuadro</button></div></div>
         <div><div class="field"><label>Partir de una figura base</label><div class="row" style="gap:6px"><select id="base" style="flex:1;min-width:0">${Ilustra.PATRONES.map(p => `<option value="${p}" ${p === (patronBase || 'sentadilla') ? 'selected' : ''}>${esc((typeof PATRON_NOMBRE !== 'undefined' && PATRON_NOMBRE[p]) || p)}</option>`).join('')}</select><button type="button" class="sm" id="aplicar-base" title="Reemplaza las 3 posiciones por esa figura">Usar</button></div></div>
           <div class="field"><label>Equipamiento (tocá o arrastrá al dibujo)</label><div class="row" id="paleta" style="gap:6px;flex-wrap:wrap"></div></div>
           <div class="field"><label>Copiar una posición a otra</label>
@@ -68,7 +71,19 @@ function disenarPosiciones({ poses, patronBase, zona, eq }) {
       });
       $$('[data-del]', m).forEach(b => b.onclick = () => { est[cur].eq.splice(Number(b.dataset.del), 1); sel = null; todo(); });
     };
-    const pintarChecks = () => { $('#ind-b', m).checked = !!est[cur].a2; $('#ind-p', m).checked = !!est[cur].b; };
+    const pintarChecks = () => { $('#ind-b', m).checked = !!est[cur].a2; $('#ind-p', m).checked = !!est[cur].b; const z = Math.round((est[0].z ?? 1) * 100); $('#zoom', m).value = z; $('#zoomv', m).textContent = z + '%'; };
+    // Tamaño de la persona: igual en las 3 posiciones, para que la secuencia no "salte" de tamaño
+    const bajoY = (p) => { const k = Ilustra.cinematica(p), e = Ilustra.escalaDe(p), hy = p.hy ?? 78; return Math.max(...[k.hip, k.sh, k.cab, k.A1.el, k.A1.mano, k.A2.mano, k.L1.ro, k.L1.to, k.L1.dedo, k.L2.ro, k.L2.to, k.L2.dedo].filter(Boolean).map(q => q[1] * e + hy)); };
+    const poner = (z) => {
+      z = Math.max(0.4, Math.min(1, z));
+      est.forEach(p => { const enPiso = Math.abs(bajoY(p) - Ilustra.SUELO) <= 4; if (z >= 1) delete p.z; else p.z = Math.round(z * 100) / 100; if (enPiso) Ilustra.apoyarSuelo(p); });   // si la figura estaba apoyada en el piso, sigue apoyada
+    };
+    // Puntos del cuerpo de una pose en el cuadro de 200 x 160, para saber si entra completa
+    const cabe = (p, z) => {
+      const k = Ilustra.cinematica({ ...p, z }), e = Ilustra.escalaDe({ ...p, z }), hx = p.hx ?? 100, hy = p.hy ?? 78;
+      const pts = [k.hip, k.sh, k.cab, k.A1.el, k.A1.mu, k.A1.mano, k.A2.el, k.A2.mu, k.A2.mano, k.L1.ro, k.L1.to, k.L1.dedo, k.L2.ro, k.L2.to, k.L2.dedo].filter(Boolean).map(q => [q[0] * e + hx, q[1] * e + hy]);
+      return pts.every(q => q[0] >= 6 && q[0] <= 194 && q[1] >= 8 && q[1] <= 150);
+    };
     const todo = () => { pintarTabs(); pintarLienzo(); pintarMini(); pintarPuestos(); pintarChecks(); };
 
     // paleta de equipamiento
@@ -84,7 +99,7 @@ function disenarPosiciones({ poses, patronBase, zona, eq }) {
       } else adherir(it);
       p.eq.push(it); sel = p.eq.length - 1; todo();
     };
-    const manos = () => { const k = Ilustra.cinematica(est[cur]), T = (q) => [q[0] * Ilustra.SC + (est[cur].hx ?? 100), q[1] * Ilustra.SC + (est[cur].hy ?? 78)]; return [T(k.A1.mano), T(k.A2.mano)]; };
+    const manos = () => { const k = Ilustra.cinematica(est[cur]), z = Ilustra.escalaDe(est[cur]), T = (q) => [q[0] * z + (est[cur].hx ?? 100), q[1] * z + (est[cur].hy ?? 78)]; return [T(k.A1.mano), T(k.A2.mano)]; };
     function adherir(it) {
       if (!Ilustra.enMano(it.k) && it.k !== 'barra_dominadas') return;
       const [m1, m2] = manos();
@@ -112,7 +127,7 @@ function disenarPosiciones({ poses, patronBase, zona, eq }) {
     });
     lienzo.addEventListener('pointermove', (ev) => {
       if (!arr) return;
-      const P = aSvg(ev), p = est[cur], SC = Ilustra.SC, hip = [p.hx ?? 100, p.hy ?? 78];
+      const P = aSvg(ev), p = est[cur], SC = Ilustra.escalaDe(p), hip = [p.hx ?? 100, p.hy ?? 78];
       const k = Ilustra.cinematica(p), T = (q) => [q[0] * SC + hip[0], q[1] * SC + hip[1]];
       if (arr.tipo === 'it') { const x = p.eq[arr.i]; x.x = Math.round(Math.max(0, Math.min(200, P[0]))); x.y = Math.round(Math.max(0, Math.min(160, P[1]))); x.m = 0; }
       else switch (arr.n) {
@@ -137,6 +152,14 @@ function disenarPosiciones({ poses, patronBase, zona, eq }) {
     };
     lienzo.addEventListener('pointerup', soltar); lienzo.addEventListener('pointercancel', soltar);
 
+    $('#zoom', m).oninput = (e) => { poner(Number(e.target.value) / 100); $('#zoomv', m).textContent = e.target.value + '%'; pintarLienzo(); };
+    $('#zoom', m).onchange = () => { pintarMini(); };
+    $('#ajustar', m).onclick = () => {
+      let z = 1; while (z > 0.4 && !est.every(p => cabe(p, z))) z = Math.round((z - 0.05) * 100) / 100;
+      const entra = est.every(p => cabe(p, z));
+      poner(z); todo();
+      toast(entra ? (z >= 1 ? 'Las 3 posiciones ya entran completas en el cuadro' : 'Tamaño ajustado al ' + Math.round(z * 100) + '%') : 'Aun al 40 % alguna posición se sale: movela con el punto de la cadera (el de más abajo del torso)', entra ? undefined : 'warn');
+    };
     $('#ind-b', m).onchange = (e) => { const p = est[cur]; p.a2 = e.target.checked ? clonar(p.a) : null; todo(); };
     $('#ind-p', m).onchange = (e) => { const p = est[cur]; p.b = e.target.checked ? clonar(p.l) : null; todo(); };
     $('#suelo', m).onclick = () => { Ilustra.apoyarSuelo(est[cur]); todo(); };
@@ -156,7 +179,7 @@ function disenarPosiciones({ poses, patronBase, zona, eq }) {
     };
     $('#aplicar-base', m).onclick = async () => {
       if (!(await confirmar('Se reemplazan las 3 posiciones por la figura base elegida. ¿Seguir?', 'Reemplazar'))) return;
-      est = Ilustra.plantilla($('#base', m).value); sel = null; todo();
+      const zz = est[0].z ?? 1; est = Ilustra.plantilla($('#base', m).value); poner(zz); sel = null; todo();
     };
     $('#play', m).onclick = () => {
       clearInterval(anim); const sec = [0, 1, 2, 1, 0, 1, 2, 1, 0]; let n = 0;
@@ -165,7 +188,7 @@ function disenarPosiciones({ poses, patronBase, zona, eq }) {
     $('#ok', m).onclick = () => {
       clearInterval(anim);
       terminado = true;
-      const limpias = est.map(p => ({ t: p.t, a: p.a, a2: p.a2 || null, l: p.l, b: p.b || null, hx: p.hx, hy: p.hy, ...(p.ht != null ? { ht: p.ht } : {}), eq: (p.eq || []).map(x => ({ k: x.k, x: x.x, y: x.y, m: x.m || 0, s: x.s || 1 })) }));
+      const limpias = est.map(p => ({ t: p.t, a: p.a, a2: p.a2 || null, l: p.l, b: p.b || null, hx: p.hx, hy: p.hy, ...(p.ht != null ? { ht: p.ht } : {}), ...(p.z != null && p.z < 1 ? { z: p.z } : {}), eq: (p.eq || []).map(x => ({ k: x.k, x: x.x, y: x.y, m: x.m || 0, s: x.s || 1 })) }));
       const imgs = limpias.map(p => Ilustra.aDataUrl(Ilustra.pose2svg(p, { color })));
       resolve({ poses: { v: 1, poses: limpias }, imgs });
       m.close();

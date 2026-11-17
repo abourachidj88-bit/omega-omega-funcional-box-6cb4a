@@ -22,7 +22,7 @@ async function esperar() { for (let i = 0; i < 60; i++) { try { await fetch(BASE
   try {
     await esperar();
     let r = await api('POST', '/api/setup', { username: 'dueno', password: 'Omega#2026', nombre: 'Dueño' }); const admin = r.data.token;
-    r = await api('GET', '/api/estado'); assert.match(r.data.version, /Versión 12/); paso("la app informa Versión 12");
+    r = await api('GET', '/api/estado'); assert.match(r.data.version, /Versión 1[23]/); paso("la app informa la versión actual");
 
     console.log('1) Baja vacía = fecha de alta');
     r = await api('POST', '/api/clientes', { nombre: 'Ana Prueba', fecha_alta: '2026-11-01' }, admin); assert.equal(r.status, 200, JSON.stringify(r.data));

@@ -186,6 +186,7 @@ function aplicar(db) {
   v10(db, add);
   v11(db, add);
   v12(db, add);
+  v13(db, add);
 }
 // Versión 7: descuentos, seguimiento de alumnos y de visitas, profesor de seguimiento en las rutinas
 function v7(db, add) {
@@ -231,6 +232,11 @@ function v7(db, add) {
 }
 // Versión 9: posiciones dibujadas por el usuario (figura de palitos) para los ejercicios nuevos
 // Versión 11: alias con el que cada alumno figura en WhatsApp (Hark Pro lo usa para reconocer la conversación)
+// Versión 13: peso del equipamiento (tilde "tiene peso" + valor en kg, texto libre: "12", "4 a 20")
+function v13(db, add) {
+  add('equipamiento', 'tiene_peso', 'INTEGER NOT NULL DEFAULT 0');
+  add('equipamiento', 'peso', 'TEXT');
+}
 // Versión 12: equipamiento que usa cada formato (JSON con las claves de la tabla equipamiento; vacío = todo el equipamiento)
 function v12(db, add) {
   add('formatos', 'equipos', 'TEXT');

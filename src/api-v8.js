@@ -63,5 +63,19 @@ function registrar(ctx) {
     }));
     return { ok: true, eliminadas: n };
   });
+
+  // ---------- V13: biblioteca de ejercicios. "ia" = los que trajo el programa o aceptó la IA (origen base / sugerido / ia); "propio" = los creó un usuario.
+  // Quitar un ejercicio lo saca de la biblioteca (inactivo): las rutinas y los circuitos ya armados lo conservan, igual que el botón ✕ de la Biblioteca.
+  route('GET', '/api/depurar/ejercicios', ADM, () => all(`SELECT e.id, e.zona, e.nombre, e.origen, e.capacidad, e.energia, e.equipo, COALESCE(q.nombre, 'Sin equipo') AS equipo_nombre,
+    CASE WHEN e.origen = 'propio' THEN 'propio' ELSE 'ia' END AS fuente,
+    (SELECT COUNT(*) FROM rutina_items ri WHERE ri.ejercicio_id = e.id) AS en_rutinas
+    FROM ejercicios e LEFT JOIN equipamiento q ON q.clave = e.equipo WHERE e.activo = 1 ORDER BY e.zona, e.nombre COLLATE NOCASE`));
+  route('POST', '/api/depurar/ejercicios', ADM, async ({ req }) => {
+    const b = await readBody(req), lista = ids(b); if (!lista.length) throw bad('Tildá al menos un ejercicio');
+    if (lista.length > 2000) throw bad('Demasiados ejercicios de una vez');
+    let n = 0;
+    tx(() => lista.forEach(id => { const r = run('UPDATE ejercicios SET activo = 0 WHERE id = ? AND activo = 1', id); if (r.changes) n++; }));
+    return { ok: true, eliminados: n };
+  });
 }
 module.exports = { registrar };

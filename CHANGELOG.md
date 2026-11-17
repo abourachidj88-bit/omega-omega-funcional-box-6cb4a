@@ -1,5 +1,12 @@
 # OMEGA · Historial de versiones
 
+## Versión 13
+Módulos Planificación (Biblioteca y Equipamiento) y Ajustes.
+- **Dibujo de las 3 posiciones:** nuevo control «Tamaño de la persona» (40 % a 100 %) y botón «Ajustar al cuadro», que elige el tamaño más grande con el que entran completas las 3 posiciones. El tamaño es el mismo en las 3 posiciones, se guarda con el ejercicio (`poses[].z`) y se ve igual en las imágenes. Si la figura estaba apoyada en el piso, sigue apoyada al achicarla.
+- **Equipamiento con peso:** cada equipamiento tiene el tilde «Tiene peso» y, si está tildado, el valor en kg (texto libre: «12», «4 a 20»). Se carga en las tarjetas (se guarda con «Guardar cantidades») y al crear equipamiento nuevo. El equipamiento que ya traía el peso en el nombre (mancuernas, pelotas, bolsos, barras con discos) queda tildado con su valor.
+- **Ajustes · Depurar la base · Biblioteca de ejercicios:** dos pestañas, «Importados por IA» (los que trajo el programa o se aceptaron de las sugerencias) y «Creados por el usuario». Se tilda ejercicio por ejercicio, por estímulo completo (patrón, capacidad física o sistema energético) o «Seleccionar todos». Quitar un ejercicio lo saca de la biblioteca; las rutinas y los circuitos ya armados lo conservan.
+- Nuevas columnas `equipamiento.tiene_peso` y `equipamiento.peso`. Pruebas: test/v13.js (21) y test/ui13.js (28).
+
 ## Versión 12
 Módulo Planificación.
 - **Equipamiento por formato:** cada formato tiene una lista desplegable (varias opciones) con el equipamiento que usa: solo peso corporal, solo bandas, solo sogas, combinaciones, etc. Sin elegir ninguno usa todo el equipamiento. Se elige en *Formatos e Intervalos* y en la columna nueva **Equipamiento** de la tabla «Lo que la IA toma de cada formato» (pantalla Equipamiento). Los circuitos se arman solo con ejercicios de ese equipamiento; si falta algún ejercicio, el lugar queda para elegir a mano (sin avisos ni usar otro equipo: el profesor o el dueño los agrega cuando lo necesita). Los reemplazos manuales también se limitan al equipamiento del formato.
